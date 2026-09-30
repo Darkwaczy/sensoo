@@ -7,6 +7,7 @@
 Built for the KodeHauz@10 Hackathon &middot; Decennium Sprint
 
 [![React Native](https://img.shields.io/badge/React_Native-Expo_57-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://reactnative.dev)
+[![KodeHauz MSFlib](https://img.shields.io/badge/Engine-KodeHauz_MSFlib-0E3B20?style=flat-square)](https://github.com/mavlon00/sensoo)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.1.0-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
@@ -19,7 +20,7 @@ Built for the KodeHauz@10 Hackathon &middot; Decennium Sprint
 
 Counterfeit medicines, packaged foods, and cosmetics are a major public safety crisis in Nigeria and broader African markets. Existing verification systems rely on static scratch-off SMS codes that counterfeiters easily clone, reuse, or print onto fake packaging in bulk.
 
-**Sensoo** solves this by pairing product verification codes with **instant geospatial and temporal telemetry**. When a consumer or merchant scans a product, the client records GPS coordinates and UTC timestamps. The backend validates whether the scan respects physical laws and manufacturer supply-chain boundaries before certifying authenticity.
+**Sensoo** solves this by pairing product verification codes with **instant geospatial and temporal telemetry**, powered by the **KodeHauz MSFlib** verification engine. When a consumer or merchant scans a product, the client records GPS coordinates and UTC timestamps. The backend validates whether the scan respects physical laws and manufacturer supply-chain boundaries before certifying authenticity.
 
 ---
 
@@ -43,6 +44,17 @@ Every scan submitted via the client evaluates four core heuristics:
 ```
 
 Once a consumer successfully verifies a product, the code is retired. If that same barcode is ever scanned again anywhere else in the country, the system flags an immediate clone alarm.
+
+---
+
+## KodeHauz MSFlib Engine Integration
+
+Sensoo leverages the **KodeHauz MSFlib (EngineCore)** layer (`backend/msflib.py`) to manage high-throughput product tracking and anomaly detection:
+
+* **Batch & Region Geofencing:** Factory batch registrations record assigned distribution territories and initial batch metadata.
+* **Scan Telemetry Ledger:** High-precision GPS coordinates, UTC timestamps, and scan roles are recorded atomically to track the complete product journey.
+* **State Lifecycle Mediation:** Validates transitions between `SHIPPED`, `IN_STOCK`, and `PURCHASED_RETIRED` states, ensuring atomic retirement upon consumer purchase.
+* **Surveillance Feed:** Powers real-time audit feeds consumed by regulatory monitoring dashboards (e.g. NAFDAC surveillance).
 
 ---
 
