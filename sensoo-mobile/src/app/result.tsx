@@ -24,6 +24,7 @@ export type ScenarioType =
   | 'WRONG_REGION';
 
 interface ScenarioConfig {
+  serialNumber: string | undefined;
   type: ScenarioType;
   title: string;
   subtitle: string;
@@ -45,8 +46,7 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
   COUNTERFEIT: {
     type: 'COUNTERFEIT',
     title: 'Counterfeit Detected',
-    subtitle:
-      "This product doesn't match trusted manufacturer records. It may be fake or altered.",
+    subtitle: "This product doesn't match trusted manufacturer records. It may be fake or altered.",
     titleColor: '#DC2626',
     primaryButtonColor: '#DC2626',
     heroImage: require('../../assets/icons/hero_counterfeit.png'),
@@ -65,12 +65,12 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     ],
     actionSecondaryText: 'Report Product',
     actionSecondaryIcon: '⚠️',
+    serialNumber: undefined
   },
   ALREADY_PURCHASED: {
     type: 'ALREADY_PURCHASED',
     title: 'Already Purchased',
-    subtitle:
-      'This product has already been scanned multiple times. It may be reused, cloned or resold.',
+    subtitle: 'This product has already been scanned multiple times. It may be reused, cloned or resold.',
     titleColor: '#D97706',
     primaryButtonColor: '#D97706',
     heroImage: require('../../assets/icons/hero_purchased.png'),
@@ -89,12 +89,12 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     ],
     actionSecondaryText: 'View Scan History',
     actionSecondaryIcon: '🔖',
+    serialNumber: undefined
   },
   IMPOSSIBLE_TRAVEL: {
     type: 'IMPOSSIBLE_TRAVEL',
     title: 'Impossible Travel',
-    subtitle:
-      'This product was scanned in two locations too far apart in a short time. This is not possible.',
+    subtitle: 'This product was scanned in two locations too far apart in a short time. This is not possible.',
     titleColor: '#DC2626',
     primaryButtonColor: '#DC2626',
     heroImage: require('../../assets/icons/hero_travel.png'),
@@ -113,6 +113,7 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     ],
     actionSecondaryText: 'Report Product',
     actionSecondaryIcon: '⚠️',
+    serialNumber: undefined
   },
   AUTHENTIC: {
     type: 'AUTHENTIC',
@@ -138,12 +139,12 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     ],
     actionSecondaryText: 'Save to History',
     actionSecondaryIcon: '🔖',
+    serialNumber: undefined
   },
   WRONG_REGION: {
     type: 'WRONG_REGION',
     title: 'Wrong Region',
-    subtitle:
-      'This product is genuine, but it is not distributed in this region. It may be imported or diverted.',
+    subtitle: 'This product is genuine, but it is not distributed in this region. It may be imported or diverted.',
     titleColor: '#3B82F6',
     primaryButtonColor: '#D97706',
     heroImage: require('../../assets/icons/hero_region.png'),
@@ -164,6 +165,7 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     ],
     actionSecondaryText: 'Learn More',
     actionSecondaryIcon: 'ℹ️',
+    serialNumber: undefined
   },
 };
 
@@ -212,10 +214,13 @@ export default function ResultScreen() {
         },
       });
     } else if (activeScenario === 'AUTHENTIC') {
-      Alert.alert(
-        'Saved to History',
-        'Panadol Extra Tablets 500mg verified and recorded into your verified purchases history.'
-      );
+      router.push({
+        pathname: '/saved-to-history',
+        params: {
+          name: config.productName,
+          code: params.code || '5000158105224',
+        },
+      });
     }
   };
 
@@ -269,6 +274,18 @@ export default function ResultScreen() {
                 </TouchableOpacity>
               )
             )}
+            <TouchableOpacity
+              style={styles.scenarioSelectorChip}
+              onPress={() => router.push({ pathname: '/product-not-found', params: { code: params.code } })}
+            >
+              <Text style={styles.scenarioSelectorText}>🔍 Not Found</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.scenarioSelectorChip}
+              onPress={() => router.push({ pathname: '/verification-unavailable', params: { code: params.code } })}
+            >
+              <Text style={styles.scenarioSelectorText}>📶 Offline</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -523,46 +540,84 @@ export default function ResultScreen() {
 
       {/* Bottom Fixed Action Buttons */}
       <SafeAreaView style={styles.bottomSafeArea} edges={['bottom']}>
-        <View style={styles.bottomButtonsRow}>
-          <TouchableOpacity
-            style={[
-              styles.secondaryOutlineButton,
-              (activeScenario === 'COUNTERFEIT' || activeScenario === 'IMPOSSIBLE_TRAVEL') &&
-                styles.secondaryOutlineButtonRed,
-              (activeScenario === 'ALREADY_PURCHASED' || activeScenario === 'WRONG_REGION') &&
-                styles.secondaryOutlineButtonAmber,
-            ]}
-            activeOpacity={0.8}
-            onPress={handleSecondaryAction}
-          >
-            <Text style={styles.secondaryButtonIcon}>{config.actionSecondaryIcon}</Text>
-            <Text
-              style={[
-                styles.secondaryButtonText,
-                (activeScenario === 'COUNTERFEIT' || activeScenario === 'IMPOSSIBLE_TRAVEL') && {
-                  color: '#DC2626',
-                },
-                (activeScenario === 'ALREADY_PURCHASED' || activeScenario === 'WRONG_REGION') && {
-                  color: '#B45309',
-                },
-                activeScenario === 'AUTHENTIC' && { color: '#059669' },
-              ]}
+        {activeScenario !== 'AUTHENTIC' ? (
+          <View style={styles.counterfeitActionContainer}>
+            {/* Primary Action: Ask Sensoo */}
+            <TouchableOpacity
+              style={styles.askSensooPrimaryBtn}
+              activeOpacity={0.88}
+              onPress={() => {
+                router.push({
+                  pathname: '/agent',
+                  params: {
+                    startScreen: 'contextual',
+                    scanCode: params.code || config.serialNumber,
+                    productName: config.productName.replace('\n', ' '),
+                    scenario: activeScenario,
+                  },
+                });
+              }}
             >
-              {config.actionSecondaryText}
-            </Text>
-          </TouchableOpacity>
+              <Text style={styles.askSensooMicIcon}>🎙️</Text>
+              <Text style={styles.askSensooBtnText}>Ask Sensoo</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.primarySolidButton,
-              { backgroundColor: config.primaryButtonColor },
-            ]}
-            activeOpacity={0.85}
-            onPress={handleDone}
-          >
-            <Text style={styles.primarySolidButtonText}>Done</Text>
-          </TouchableOpacity>
-        </View>
+            {/* Secondary Actions Row: Why is this fake? & Report Product */}
+            <View style={styles.counterfeitSubActionsRow}>
+              <TouchableOpacity
+                style={styles.subOutlineBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  router.push({
+                    pathname: '/agent',
+                    params: {
+                      startScreen: 'explain_scan',
+                      scanCode: params.code || config.serialNumber,
+                      productName: config.productName.replace('\n', ' '),
+                      scenario: activeScenario,
+                    },
+                  });
+                }}
+              >
+                <Text style={styles.subOutlineBtnText}>
+                  {activeScenario === 'WRONG_REGION' ? 'Why wrong region?' : 'Why is this fake?'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.subOutlineBtn}
+                activeOpacity={0.8}
+                onPress={handleSecondaryAction}
+              >
+                <Text style={styles.subOutlineBtnText}>Report Product</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.bottomButtonsRow}>
+            <TouchableOpacity
+              style={styles.secondaryOutlineButton}
+              activeOpacity={0.8}
+              onPress={handleSecondaryAction}
+            >
+              <Text style={styles.secondaryButtonIcon}>{config.actionSecondaryIcon}</Text>
+              <Text style={[styles.secondaryButtonText, { color: '#059669' }]}>
+                {config.actionSecondaryText}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.primarySolidButton,
+                { backgroundColor: config.primaryButtonColor },
+              ]}
+              activeOpacity={0.85}
+              onPress={handleDone}
+            >
+              <Text style={styles.primarySolidButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -1112,5 +1167,54 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  counterfeitActionContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 14,
+    gap: 10,
+  },
+  askSensooPrimaryBtn: {
+    backgroundColor: '#059669',
+    borderRadius: 16,
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  askSensooMicIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  askSensooBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  counterfeitSubActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  subOutlineBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  subOutlineBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#1E293B',
   },
 });

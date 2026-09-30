@@ -152,14 +152,25 @@ export default function ScannerScreen() {
 
           <Text style={styles.headerTitleCenter}>Scan Product</Text>
 
-          {/* Flashlight Toggle */}
-          <TouchableOpacity
-            style={[styles.circleIconButton, torchOn && styles.circleIconButtonActive]}
-            activeOpacity={0.7}
-            onPress={() => setTorchOn(!torchOn)}
-          >
-            <Text style={styles.torchIconText}>⚡</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Help / Scan Failed Tips button */}
+            <TouchableOpacity
+              style={styles.circleIconButton}
+              activeOpacity={0.7}
+              onPress={() => router.push('/scan-failed')}
+            >
+              <Text style={{ fontSize: 16, color: '#FFFFFF', fontWeight: 'bold' }}>?</Text>
+            </TouchableOpacity>
+
+            {/* Flashlight Toggle */}
+            <TouchableOpacity
+              style={[styles.circleIconButton, torchOn && styles.circleIconButtonActive]}
+              activeOpacity={0.7}
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchIconText}>⚡</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
