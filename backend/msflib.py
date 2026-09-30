@@ -16,12 +16,21 @@ class Engine:
         self.config = config or {}
         self._storage: Dict[str, Any] = {}  # in-memory stand-in for real storage
 
-    def register_code(self, code: str, region: str, batch_id: str) -> bool:
-        """Register a new product code with its shipping region and batch."""
+    def register_code(
+        self,
+        code: str,
+        region: str,
+        batch_id: str,
+        product_name: str = "Unknown Product",
+        manufacturer: str = "Unknown Manufacturer",
+    ) -> bool:
+        """Register a new product code with its shipping region, batch and product info."""
         self._storage[code] = {
             "state": "SHIPPED",
             "region": region,
             "batch_id": batch_id,
+            "product_name": product_name,
+            "manufacturer": manufacturer,
             "scans": [],
         }
         return True
@@ -53,12 +62,10 @@ class Engine:
                 entry = dict(s)
                 entry["code"] = code
                 all_scans.append(entry)
-        # sort by timestamp descending
         all_scans.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         return all_scans[:limit]
 
 
-# Convenience factory so the rest of the code can do: from msflib import get_engine
 _engine: Optional[Engine] = None
 
 

@@ -7,20 +7,18 @@ All business logic lives in sensoo_core; this file is only HTTP + docs.
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
 
 from msflib import get_engine
 from sensoo_core import seed_demo_data, verify_scan
 
-# Create the app once at import time
 app = FastAPI(
     title="Sensoo Verification API",
     description="Anti-counterfeit scan engine for the KodeHauz@10 Hackathon",
-    version="0.1.0",
+    version="0.2.0",
 )
 
-# Load demo data the moment the server starts
 seed_demo_data()
 
 
@@ -34,6 +32,10 @@ class ScanRequest(BaseModel):
         None,
         description="ISO-8601 timestamp; defaults to now if omitted",
     )
+    device_id: Optional[str] = Field(
+        None,
+        description="Unique device identifier for clone detection across phones",
+    )
 
 
 class ScanResponse(BaseModel):
@@ -42,6 +44,9 @@ class ScanResponse(BaseModel):
     reason: str
     alarms: List[str]
     new_state: Optional[str]
+    product_name: Optional[str]
+    manufacturer: Optional[str]
+    batch_id: Optional[str]
 
 
 class FeedItem(BaseModel):
@@ -52,11 +57,12 @@ class FeedItem(BaseModel):
     lng: float
     timestamp: str
     alarms: List[str]
+    device_id: Optional[str] = None
 
 
 @app.post("/scan", response_model=ScanResponse)
 def scan_product(body: ScanRequest) -> ScanResponse:
-    """Accept a product scan and return AUTHENTIC or FAKE with the reason."""
+    """Accept a product scan and return AUTHENTIC or FAKE with product details."""
     ts = body.timestamp or datetime.now(timezone.utc).isoformat()
     result = verify_scan(
         role=body.role.lower().strip(),
@@ -64,6 +70,7 @@ def scan_product(body: ScanRequest) -> ScanResponse:
         lat=body.lat,
         lng=body.lng,
         timestamp=ts,
+        device_id=body.device_id,
     )
     return ScanResponse(**result)
 
