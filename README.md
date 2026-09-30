@@ -28,36 +28,87 @@ Counterfeit medicines, packaged foods, and cosmetics are a major public safety c
 
 ---
 
-## Agentic AI Stack
+## Sensoo Agentic AI — Dual-Brain Consumer Safety Intelligence
 
-Sensoo uses a **Dual-Brain Agentic AI** architecture for consumer safety intelligence:
+Sensoo includes a fully conversational **Agentic AI assistant** that consumers can talk to (via voice or text) to understand scan results, get clinical safety guidance, find nearby hospitals, and report suspicious products — all in their native Nigerian language.
 
-| Layer | Technology | Purpose |
-|:---|:---|:---|
-| **Nigerian Language Processing** | [NCAIR1/N-ATLaS](https://huggingface.co/NCAIR1/N-ATLaS) (Hugging Face) | Fluent responses in Yorùbá, Hausa, Igbo, and Nigerian Pidgin using Nigeria's sovereign AI model |
-| **Core Reasoning** | Google Gemini 3.1 Flash Lite (primary) / Gemini 2.5 Flash Lite (fallback) | Counterfeit forensics, drug toxicology analysis, clinical safety guidance |
-| **Voice Synthesis** | expo-speech (device TTS) | Read AI responses aloud through device speakers |
-| **Voice Input** | Web Speech Recognition API | Listen to spoken questions from consumers in markets |
-| **Verification Engine** | KodeHauz MSFlib + FastAPI backend | 4-alarm product verification with geo-velocity anomaly detection |
+### What the AI Agent Can Do
 
-### AI Service Flow
+| Capability | Description |
+|:---|:---|
+| **Explain a Scan** | Breaks down why a product was flagged (counterfeit barcode, impossible travel speed, cloned packaging, wrong region) in plain, non-technical language |
+| **Clinical Safety Triage** | If a consumer already took a counterfeit medicine: asks what they took, how much, and when — then provides immediate safety steps and urges hospital evaluation |
+| **Find Nearby Help** | Shows accredited clinics and hospitals (LUTH Surulere, Reddington, Ikeja General) with distance, rating, and one-tap call |
+| **Report a Product** | Guides the consumer through filing a suspicious product report, dispatched to NAFDAC Sentinel threat clusters |
+| **Voice Interaction** | Full voice input (speech-to-text) and voice output (text-to-speech) — the consumer can speak their question and hear the AI reply out loud |
+| **5 Nigerian Languages** | Responds fluently in **English**, **Nigerian Pidgin**, **Yorùbá**, **Hausa**, and **Igbo** |
+
+### Dual-Brain Architecture
+
+The AI uses two intelligence layers working together:
 
 ```
 Consumer speaks/types question
         │
         ▼
-┌─────────────────────┐
-│  sensooAiService.ts │ ← Frontend AI orchestrator
-│                     │
-│  1. Build context   │ (product, scan code, scenario, language)
-│  2. Try Gemini 3.1  │ ← Primary model
-│  3. Try Gemini 2.5  │ ← Fallback model
-│  4. N-ATLaS cache   │ ← Offline vernacular safety replies
-└─────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                    sensooAiService.ts                       │
+│                 (Frontend AI Orchestrator)                  │
+│                                                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  BRAIN 1: Google Gemini 3.1 Flash Lite (Primary)     │  │
+│  │  → Counterfeit forensics, drug toxicology,           │  │
+│  │    clinical safety reasoning, contextual dialogue    │  │
+│  │                                                      │  │
+│  │  FALLBACK: Gemini 2.5 Flash Lite                     │  │
+│  │  → Auto-switches if primary model is unavailable     │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  BRAIN 2: NCAIR1/N-ATLaS (Nigerian Sovereign AI)    │  │
+│  │  → Nigerian language detection & fluent response     │  │
+│  │    generation in Pidgin, Yorùbá, Hausa, Igbo         │  │
+│  │  → Offline-capable local vernacular safety cache     │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                            │
+│  Context injected per query:                               │
+│  • Product name, scanned code, verification status         │
+│  • User location, selected language                        │
+│  • Conversation history (multi-turn memory)                │
+└────────────────────────────────────────────────────────────┘
         │
         ▼
-  Voice speaks answer aloud + displays on screen
+  Voice speaks answer aloud + displays text on screen
 ```
+
+### Technology Stack
+
+| Layer | Technology | Purpose |
+|:---|:---|:---|
+| **Nigerian Language Processing** | [NCAIR1/N-ATLaS](https://huggingface.co/NCAIR1/N-ATLaS) (Hugging Face) | Fluent responses in Yorùbá, Hausa, Igbo, and Nigerian Pidgin using Nigeria's sovereign AI model |
+| **Core Reasoning** | Google Gemini 3.1 Flash Lite (primary) / Gemini 2.5 Flash Lite (fallback) | Counterfeit forensics, drug toxicology analysis, clinical safety guidance |
+| **Voice Synthesis** | expo-speech (device neural TTS) | Reads AI responses aloud through device speakers |
+| **Voice Input** | Web Speech Recognition API | Listens to spoken questions from consumers in market environments |
+| **Verification Engine** | KodeHauz MSFlib + FastAPI backend | 4-alarm product verification with geo-velocity anomaly detection |
+
+### How the Fallback Chain Works
+
+The AI never leaves the consumer without an answer:
+
+1. **Try Gemini 3.1 Flash Lite** → Full contextual response with product forensics
+2. **If 3.1 fails → Try Gemini 2.5 Flash Lite** → Same quality, different model endpoint
+3. **If both fail → N-ATLaS Local Cache** → Pre-built fluent responses in all 5 languages, available offline — the consumer always gets a clinically accurate safety response even without internet
+
+### Example AI Interactions
+
+**English — Explaining a counterfeit scan:**
+> "This Paracetamol 500mg was flagged as counterfeit. The barcode does not match any authorized NAFDAC manufacturer records. Do not consume this product. If you already took it, drink clean water and visit the nearest accredited clinic."
+
+**Nigerian Pidgin — Clinical safety triage:**
+> "🚨 OYA LISTEN: If you don already drink this medicine, stop am immediately! Drink plenty clean water. If your eye dey turn you or belle dey pain you, sharp-sharp make you go LUTH hospital for Surulere or call 112 emergency now-now."
+
+**Yorùbá — Product alert:**
+> "⚠️ Oogun yi jẹ ayederu. Koodu ati nọmba re ko ba iwe NAFDAC mu rara. E jọwọ, ẹ ma ṣe lo oogun yi tabi ta fun ẹnikẹni!"
 
 ---
 
