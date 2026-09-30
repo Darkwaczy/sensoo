@@ -1,150 +1,134 @@
-# 🛡️ Sensoo — Real Products. Safer Lives.
+<div align="center">
 
-> **Anti-Counterfeit & Telemetry-Backed Product Verification System for Nigeria**  
-> *Developed for the KodeHauz@10 Hackathon (Decennium Sprint)*
+# Sensoo
+
+**Real-time product verification and anti-counterfeit detection engine.**
+
+Built for the KodeHauz@10 Hackathon &middot; Decennium Sprint
+
+[![React Native](https://img.shields.io/badge/React_Native-Expo_57-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://reactnative.dev)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.1.0-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+
+</div>
 
 ---
 
-## 📌 1. Project Overview & Vision
+## Overview
 
-Counterfeit pharmaceuticals, cosmetics, and packaged consumables pose a catastrophic threat to public health and consumer trust across Nigeria and emerging markets. 
+Counterfeit medicines, packaged foods, and cosmetics are a major public safety crisis in Nigeria and broader African markets. Existing verification systems rely on static scratch-off SMS codes that counterfeiters easily clone, reuse, or print onto fake packaging in bulk.
 
-**Sensoo** is a real-time, consumer-first verification platform powered by geospatial telemetry and impossible-physics anomaly detection. By capturing device GPS coordinates, UTC timestamps, and manufacturer batch registries at the exact second a barcode or QR code is scanned, Sensoo instantly differentiates genuine goods from circulating packaging clones, supply-chain diversions, and counterfeit products.
-
-* **Tagline:** *"Trusted products. Healthier people. Know what you buy. Help stop fake products and keep your community safe."*
+**Sensoo** solves this by pairing product verification codes with **instant geospatial and temporal telemetry**. When a consumer or merchant scans a product, the client records GPS coordinates and UTC timestamps. The backend validates whether the scan respects physical laws and manufacturer supply-chain boundaries before certifying authenticity.
 
 ---
 
-## 🏗️ 2. System Architecture
+## Detection Rules Engine
 
-The repository is organized into a clean full-stack monorepo:
+Every scan submitted via the client evaluates four core heuristics:
+
+| Rule | Trigger Condition | Result |
+| :--- | :--- | :--- |
+| **Whitelist Validation** | Scanned code does not exist in the manufacturer batch database. | `INVALID_CODE` &mdash; Product is counterfeit. |
+| **Clone & Reuse Check** | Code exists, but its lifecycle state is already `PURCHASED_RETIRED`. | `ALREADY_PURCHASED` &mdash; Packaging reuse or cloned label. |
+| **Impossible Physics** | Travel speed between consecutive scans exceeds physical travel limits: <br> `velocity = haversine_distance(loc1, loc2) / elapsed_time > 900 km/h` | `IMPOSSIBLE_PHYSICS` &mdash; Clones circulating concurrently in multiple locations. |
+| **Regional Diversion** | First scan occurs outside the manufacturer's designated delivery region. | `WRONG_REGION` &mdash; Supply chain leak or unauthorized territory. |
+
+### Lifecycle State Machine
+
+```
+[REGISTERED] -> [SHIPPED] -> [IN_STOCK] -> [PURCHASED_RETIRED]
+                   |             |
+           (Merchant scan)  (Consumer scan)
+```
+
+Once a consumer successfully verifies a product, the code is retired. If that same barcode is ever scanned again anywhere else in the country, the system flags an immediate clone alarm.
+
+---
+
+## Repository Structure
 
 ```
 sensoo/
-├── backend/                  # Python FastAPI Verification Server
-│   ├── main.py               # REST API endpoints (/scan, /feed, /health)
-│   ├── sensoo_core.py        # Core anomaly detection & Haversine velocity rules engine
-│   ├── msflib.py             # High-speed data persistence & cluster registry mock
-│   └── requirements.txt      # Python dependencies (FastAPI, Uvicorn, Pydantic)
+├── backend/
+│   ├── main.py               # FastAPI application with /scan and /feed routes
+│   ├── sensoo_core.py        # Verification heuristics and Haversine distance math
+│   ├── msflib.py             # In-memory persistence and telemetry registry
+│   └── requirements.txt      # API dependencies
 │
-├── sensoo-mobile/            # React Native / Expo Consumer Mobile App
-│   ├── src/app/              # Expo Router file-based screens (Splash, Onboarding, Scanner, Results, Profile)
-│   ├── src/components/       # Reusable UI components & custom theme primitives
-│   ├── src/constants/        # Colors, fonts, and layout constants
-│   ├── assets/               # Brand assets (3D Shield, wave graphics, icons)
-│   └── package.json          # Node dependencies & Expo runtime scripts
+├── sensoo-mobile/
+│   ├── src/app/              # Expo Router file-based screens (Scanner, Onboarding, Results)
+│   ├── src/components/       # UI building blocks and styled primitives
+│   ├── assets/               # Production assets (3D graphics, brand assets, icons)
+│   └── package.json          # Mobile dependencies and run scripts
 │
-├── .gitignore                # Production git ignore rules
-└── README.md                 # System documentation & setup guide
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🚨 3. Fraud Detection & The 4 Mandatory Alarms
+## Running Locally
 
-Every scan submitted from the Sensoo mobile application transmits high-precision telemetry:
-* `code` (string): Scanned alphanumeric code (e.g., `UNL-9X4-B2P`).
-* `lat` & `lng` (float): High-precision GPS coordinates from device location sensors.
-* `role` (string): `consumer` or `merchant`.
-* `timestamp` (ISO-8601 UTC): Verified scan event timestamp.
+### 1. Verification API (Backend)
 
-The backend engine processes this telemetry through **4 mandatory fraud detection rules**:
+The backend is built with FastAPI and runs on Python 3.10+.
 
-| # | Alarm Code | Condition | Verdict |
-|---|---|---|---|
-| 1 | `INVALID_CODE` | Code does not exist in authorized manufacturer batch registry | **Counterfeit Product.** Fake label / unregistered barcode. |
-| 2 | `ALREADY_PURCHASED` | Code exists in registry, but its lifecycle state is already `PURCHASED_RETIRED` | **Clone Packaging Reuse.** A genuine container or QR code was duplicated or refilled. |
-| 3 | `IMPOSSIBLE_PHYSICS` | Same code scanned in two locations where $\text{Velocity} = \frac{\text{Distance}}{\Delta t} > 900\text{ km/h}$ | **Impossible Travel Speed.** Concurrently circulating counterfeit clones detected in different cities. |
-| 4 | `WRONG_REGION` | First scan occurs outside the manufacturer's authorized delivery territory | **Supply Chain Diversion.** Unauthorized distribution territory breach. |
+```bash
+cd backend
 
-### ✅ Authentic State
-When a code is in the registry, within its valid lifecycle (`SHIPPED` / `IN_STOCK`), matches its designated territory, and passes the velocity checks:
-* **Result:** `AUTHENTIC`
-* **Lifecycle Update:** Advances to `PURCHASED_RETIRED` upon consumer scan to permanently protect future buyers from clone attacks.
+# Create and activate environment
+python -m venv .venv
+source .venv/bin/activate       # macOS/Linux
+# .venv\Scripts\activate        # Windows
 
----
+# Install dependencies and start server
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
 
-## 🚀 4. Getting Started
+Interactive API docs will be available at `http://localhost:8000/docs`.
 
-### Prerequisites
-* **Node.js** (v18 or higher) & **npm**
-* **Python** (v3.9 or higher)
-* **Expo Go** app (optional, for physical iOS/Android testing)
+### 2. Consumer Mobile App (Frontend)
 
----
+The mobile application is built with Expo (React Native) and TypeScript.
 
-### Backend Setup (FastAPI)
+```bash
+cd sensoo-mobile
 
-1. Navigate to the `backend` folder:
-   ```bash
-   cd backend
-   ```
+# Install packages
+npm install
 
-2. Create and activate a virtual environment (optional but recommended):
-   ```bash
-   python -m venv venv
-   # On Windows:
-   .\venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
-   ```
+# Start development bundler
+npx expo start
+```
 
-3. Install required Python packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Launch the API server:
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-5. Access interactive Swagger API docs at:
-   👉 **http://localhost:8000/docs**
+* Press **`w`** in the terminal to open the web preview in your browser.
+* Scan the terminal QR code with the **Expo Go** app on iOS or Android.
 
 ---
 
-### Mobile App Setup (React Native / Expo)
+## API Contract
 
-1. Navigate to the `sensoo-mobile` folder:
-   ```bash
-   cd sensoo-mobile
-   ```
+### Scan Product
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```http
+POST /scan
+Content-Type: application/json
+```
 
-3. Start the development server:
-   ```bash
-   npx expo start
-   ```
-
-4. Testing Options:
-   * Press **`w`** in the terminal to launch the **Web preview** in your browser.
-   * Scan the terminal QR code using **Expo Go** on an Android or iOS device.
-
----
-
-## 📡 5. API Reference
-
-### 1. Verify Product Scan
-* **Endpoint:** `POST /scan`
-* **Description:** Verifies scanned barcode/QR against the registry, applies telemetry heuristics, and returns safety verdict.
-
-**Request Body:**
+**Request Payload:**
 ```json
 {
   "role": "consumer",
   "code": "UNL-9X4-B2P",
   "lat": 6.5244,
   "lng": 3.3792,
-  "timestamp": "2026-10-02T15:30:00Z"
+  "timestamp": "2026-10-02T14:30:00Z"
 }
 ```
 
-**Response (Authentic):**
+**Authentic Response:**
 ```json
 {
   "status": "AUTHENTIC",
@@ -154,7 +138,7 @@ When a code is in the registry, within its valid lifecycle (`SHIPPED` / `IN_STOC
 }
 ```
 
-**Response (Impossible Physics Clone):**
+**Flagged Response (Impossible Travel Speed):**
 ```json
 {
   "status": "FAKE",
@@ -164,26 +148,21 @@ When a code is in the registry, within its valid lifecycle (`SHIPPED` / `IN_STOC
 }
 ```
 
----
+### Surveillance Feed
 
-### 2. Live Surveillance Feed
-* **Endpoint:** `GET /feed?limit=20`
-* **Description:** Real-time stream of recent scans for the NAFDAC / regulatory surveillance dashboard.
+```http
+GET /feed?limit=20
+```
 
----
-
-### 3. Health Check
-* **Endpoint:** `GET /health`
-* **Response:** `{"status": "ok", "service": "sensoo"}`
+Returns recent scan logs with coordinates and alarm statuses for regulatory oversight and NAFDAC audit dashboards.
 
 ---
 
-## 👥 Contributors
+## Team
 
-* **Mavlon** ([@mavlon00](https://github.com/mavlon00)) — Backend Architecture & Verification Engine
-* **Kamalu** ([@Darkwaczy](https://github.com/Darkwaczy)) — Mobile Application & User Experience
+* **Mavlon** ([@mavlon00](https://github.com/mavlon00)) &mdash; Backend architecture, FastAPI endpoints, data layer
+* **Kamalu** ([@Darkwaczy](https://github.com/Darkwaczy)) &mdash; Mobile client, verification UI, interaction design
 
 ---
 
-## 📄 License
-This project is proprietary and developed for the **KodeHauz@10 Hackathon**. All rights reserved.
+Developed for **KodeHauz@10** &middot; 2026
