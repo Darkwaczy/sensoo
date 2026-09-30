@@ -1,6 +1,8 @@
 <div align="center">
 
-# Sensoo
+<br/>
+<img src="sensoo-mobile/assets/logo.png" alt="Sensoo Logo" width="240" />
+<br/><br/>
 
 **Real-time product verification and anti-counterfeit detection engine.**
 
