@@ -12,9 +12,12 @@ import {
   TextInput,
   Alert,
   Modal,
+  KeyboardAvoidingView,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { sendAgentMessage } from '../services/sensooAiService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -318,6 +321,55 @@ const ALERTS_DATA: AlertItem[] = [
   },
 ];
 
+interface ReportItemData {
+  id: string;
+  name: string;
+  image: any;
+  date: string;
+  status: 'Under Review' | 'Reviewed' | 'Action Taken' | 'Closed';
+  statusBg: string;
+  statusColor: string;
+}
+
+const REPORTS_DATA: ReportItemData[] = [
+  {
+    id: 'rep-1',
+    name: 'Dove Body Wash\nDeep Moisture 250ml',
+    image: require('../../assets/dove_body_wash.png'),
+    date: 'Reported on Aug 20, 2025',
+    status: 'Under Review',
+    statusBg: '#FEE2E2',
+    statusColor: '#DC2626',
+  },
+  {
+    id: 'rep-2',
+    name: 'Milo Powder 400g',
+    image: require('../../assets/colgate_total.png'),
+    date: 'Reported on Aug 18, 2025',
+    status: 'Reviewed',
+    statusBg: '#DCFCE7',
+    statusColor: '#059669',
+  },
+  {
+    id: 'rep-3',
+    name: 'Tylenol Extra Strength 500mg',
+    image: require('../../assets/panadol_extra.png'),
+    date: 'Reported on Aug 12, 2025',
+    status: 'Action Taken',
+    statusBg: '#DBEAFE',
+    statusColor: '#2563EB',
+  },
+  {
+    id: 'rep-4',
+    name: 'Maybelline Fit Me Foundation 30ml',
+    image: require('../../assets/cerave_foaming.png'),
+    date: 'Reported on Aug 10, 2025',
+    status: 'Closed',
+    statusBg: '#F1F5F9',
+    statusColor: '#64748B',
+  },
+];
+
 export default function HomeScreen() {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewType>('Home');
@@ -331,6 +383,7 @@ export default function HomeScreen() {
   const [verifiedFilter, setVerifiedFilter] = useState<'All' | 'Medicine' | 'Skincare' | 'Personal Care' | 'Food'>('All');
 
   const [alertFilter, setAlertFilter] = useState<'All' | 'Counterfeit' | 'Reused' | 'Wrong Region' | 'Suspicious'>('All');
+  const [reportsTabFilter, setReportsTabFilter] = useState<'All' | 'Under Review' | 'Reviewed'>('All');
 
   // Notifications & Profile state
   const [notificationFilter, setNotificationFilter] = useState<'All' | 'Verification' | 'System' | 'Updates'>('All');
@@ -339,6 +392,66 @@ export default function HomeScreen() {
   const [showPersonalInfoModal, setShowPersonalInfoModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showAgentModal, setShowAgentModal] = useState(false);
+  const [agentInput, setAgentInput] = useState('');
+
+  // Continuous pulsating ripple animation for Agent nav button
+  const agentPulseValue = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    const pulseAnim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(agentPulseValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(agentPulseValue, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseAnim.start();
+    return () => pulseAnim.stop();
+  }, [agentPulseValue]);
+
+  const [agentChat, setAgentChat] = useState<{ sender: 'agent' | 'user'; text: string }[]>([
+    {
+      sender: 'agent',
+      text: 'Hello Ings! I am Sensoo Agentic AI. How can I help verify your products, guide your safety, or find clinics today?',
+    },
+  ]);
+
+  const handleSendAgentQuery = async (textToSend?: string) => {
+    const q = (textToSend || agentInput).trim();
+    if (!q) return;
+    setAgentChat((prev) => [...prev, { sender: 'user', text: q }]);
+    setAgentInput('');
+
+    try {
+      const history = agentChat.map((m) => ({
+        role: (m.sender === 'agent' ? 'model' : 'user') as 'model' | 'user',
+        content: m.text,
+      }));
+      const res = await sendAgentMessage(q, history, {
+        productName: 'Panadol Extra Tablets 500mg',
+        scannedCode: 'SNS-MED-8832',
+        scenario: 'AUTHENTIC',
+        userLocation: 'Lagos, Nigeria',
+      });
+      setAgentChat((prev) => [...prev, { sender: 'agent', text: res.reply }]);
+    } catch {
+      setAgentChat((prev) => [
+        ...prev,
+        {
+          sender: 'agent',
+          text: "I've checked our telemetry database. This product category matches authorized GS1 manufacturer standards.",
+        },
+      ]);
+    }
+  };
 
   const handleMarkAllAsRead = () => {
     setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
@@ -443,7 +556,7 @@ export default function HomeScreen() {
                     setActiveView('Profile');
                   }}
                 >
-                  <Text style={styles.avatarText}>H</Text>
+                  <Text style={styles.avatarText}>I</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -454,7 +567,7 @@ export default function HomeScreen() {
             <View style={styles.greetingSection}>
               <Text style={styles.greetingTitle}>
                 <Text style={styles.greetingBlack}>Good morning, </Text>
-                <Text style={styles.greetingGreen}>Hilda</Text>
+                <Text style={styles.greetingGreen}>Ings</Text>
               </Text>
               <Text style={styles.greetingSubtitle}>Verify a product before you buy or use it.</Text>
             </View>
@@ -806,73 +919,79 @@ export default function HomeScreen() {
       {activeView === 'Alerts' && (
         <>
           <SafeAreaView style={styles.subTopSafeArea} edges={['top']}>
-            <View style={styles.subHeaderNav}>
-              <TouchableOpacity
-                style={styles.backArrowBtn}
-                activeOpacity={0.7}
-                onPress={() => setActiveView('Home')}
-              >
-                <Text style={styles.backArrowGlyph}>←</Text>
-              </TouchableOpacity>
-            </View>
             <View style={styles.subHeaderTitleBlock}>
-              <Text style={styles.subPageTitle}>Alerts</Text>
-              <Text style={styles.subPageSubtitle}>Important findings that need your attention.</Text>
+              <Text style={styles.subPageTitle}>Reports</Text>
+              <Text style={styles.subPageSubtitle}>Products you've reported and their status.</Text>
             </View>
 
-            {/* Filter Pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
-              {(['All', 'Counterfeit', 'Reused', 'Wrong Region', 'Suspicious'] as const).map((filter) => (
-                <TouchableOpacity
-                  key={filter}
-                  style={[styles.filterChip, alertFilter === filter && styles.filterChipActive]}
-                  onPress={() => setAlertFilter(filter)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.filterChipText, alertFilter === filter && styles.filterChipTextActive]}>
-                    {filter}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {/* Filter Pills: All | Under Review | Reviewed */}
+            <View style={styles.reportsFilterPillsRow}>
+              {(['All', 'Under Review', 'Reviewed'] as const).map((filter) => {
+                const isActive = reportsTabFilter === filter;
+                return (
+                  <TouchableOpacity
+                    key={filter}
+                    style={[styles.reportsFilterChip, isActive && styles.reportsFilterChipActive]}
+                    onPress={() => setReportsTabFilter(filter)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.reportsFilterChipText,
+                        isActive && styles.reportsFilterChipTextActive,
+                      ]}
+                    >
+                      {filter}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </SafeAreaView>
 
-          <ScrollView style={styles.scrollView} contentContainerStyle={styles.subScrollContent} showsVerticalScrollIndicator={false}>
-            {filteredAlerts.map((item) => (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.subScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {REPORTS_DATA.filter((item) => {
+              if (reportsTabFilter === 'All') return true;
+              if (reportsTabFilter === 'Under Review') return item.status === 'Under Review';
+              if (reportsTabFilter === 'Reviewed') return item.status !== 'Under Review';
+              return true;
+            }).map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.alertCardContainer}
+                style={styles.reportListItemCard}
                 activeOpacity={0.85}
-                onPress={() => navigateToResult(item.scenario, item.code)}
+                onPress={() =>
+                  router.push({
+                    pathname: '/report-details',
+                    params: {
+                      name: item.name,
+                      status: item.status,
+                      date: item.date.replace('Reported on ', ''),
+                    },
+                  })
+                }
               >
-                {/* Top Row: Thumbnail + Badge + Name & Status + Chevron */}
-                <View style={styles.alertCardTopRow}>
-                  <View style={styles.alertThumbBox}>
-                    <Image source={item.image} style={styles.alertThumbImage} resizeMode="contain" />
-                  </View>
-
-                  {/* Circular Icon Tag */}
-                  <View style={[styles.alertCircleBadge, { backgroundColor: item.badgeBg }]}>
-                    <Text style={[styles.alertCircleBadgeText, { color: item.badgeTextColor }]}>
-                      {item.badgeIcon}
-                    </Text>
-                  </View>
-
-                  <View style={styles.alertMetaBox}>
-                    <Text style={styles.alertProductName}>{item.name}</Text>
-                    <View style={[styles.alertStatusPill, { backgroundColor: item.statusPillBg }]}>
-                      <Text style={[styles.alertStatusPillText, { color: item.statusPillColor }]}>
-                        {item.statusPillText}
-                      </Text>
-                    </View>
-                    <Text style={styles.alertTimestamp}>{item.time}</Text>
-                  </View>
-
-                  <Text style={styles.subListChevron}>›</Text>
+                <View style={styles.reportItemThumbBox}>
+                  <Image source={item.image} style={styles.reportItemThumbImg} resizeMode="contain" />
                 </View>
 
-                {/* Bottom Callout Text */}
-                <Text style={styles.alertCalloutText}>{item.callout}</Text>
+                <View style={styles.reportItemMetaBox}>
+                  <Text style={styles.reportItemName}>{item.name}</Text>
+                  <Text style={styles.reportItemDate}>{item.date}</Text>
+                </View>
+
+                <View style={styles.reportItemStatusCol}>
+                  <View style={[styles.reportItemStatusBadge, { backgroundColor: item.statusBg }]}>
+                    <Text style={[styles.reportItemStatusBadgeText, { color: item.statusColor }]}>
+                      {item.status}
+                    </Text>
+                  </View>
+                  <Text style={styles.reportItemChevron}>›</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -907,7 +1026,7 @@ export default function HomeScreen() {
             {/* Centered Avatar and User Header */}
             <View style={styles.profileHeaderBlock}>
               <View style={styles.profileAvatarLarge}>
-                <Text style={styles.profileAvatarTextLarge}>H</Text>
+                <Text style={styles.profileAvatarTextLarge}>I</Text>
               </View>
               <Text style={styles.profileName}>Ings</Text>
               <Text style={styles.profileRole}>Account holder</Text>
@@ -1406,7 +1525,7 @@ export default function HomeScreen() {
       {/* ======================================================== */}
       <SafeAreaView style={styles.bottomSafeArea} edges={['bottom']}>
         <View style={styles.bottomNav}>
-          {/* Home */}
+          {/* 1. Home */}
           <TouchableOpacity
             style={styles.navItem}
             activeOpacity={0.7}
@@ -1424,7 +1543,7 @@ export default function HomeScreen() {
             <View style={[styles.navActiveDot, activeView !== 'Home' && styles.navDotHidden]} />
           </TouchableOpacity>
 
-          {/* History / Recent Scans */}
+          {/* 2. History */}
           <TouchableOpacity
             style={styles.navItem}
             activeOpacity={0.7}
@@ -1456,7 +1575,60 @@ export default function HomeScreen() {
             />
           </TouchableOpacity>
 
-          {/* Reports / Alerts */}
+
+          {/* 3. Agent (Centered in bottom nav with animated pulse effect) */}
+          <TouchableOpacity
+            style={styles.navItem}
+            activeOpacity={0.7}
+            onPress={() => router.push('/agent')}
+          >
+            <View style={styles.navAgentBox}>
+              {/* Outer pulsing glow ripple */}
+              <Animated.View
+                style={[
+                  styles.navAgentPulseRing,
+                  {
+                    transform: [
+                      {
+                        scale: agentPulseValue.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1.0, 1.55],
+                        }),
+                      },
+                    ],
+                    opacity: agentPulseValue.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.65, 0.0],
+                    }),
+                  },
+                ]}
+              />
+              {/* Inner glowing circle with subtle breathing scale */}
+              <Animated.View
+                style={[
+                  styles.navAgentCircle,
+                  {
+                    transform: [
+                      {
+                        scale: agentPulseValue.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1.0, 1.08],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <Text style={styles.navAgentStarGlyph}>✦</Text>
+              </Animated.View>
+              {/* Red notification dot */}
+              <View style={styles.navAgentRedDot} />
+            </View>
+            <Text style={[styles.navLabel, { color: '#059669', fontWeight: '700' }]}>Agent</Text>
+            <View style={[styles.navActiveDot, styles.navDotHidden]} />
+          </TouchableOpacity>
+
+          {/* 4. Reports */}
           <TouchableOpacity
             style={styles.navItem}
             activeOpacity={0.7}
@@ -1474,7 +1646,7 @@ export default function HomeScreen() {
             <View style={[styles.navActiveDot, activeView !== 'Alerts' && styles.navDotHidden]} />
           </TouchableOpacity>
 
-          {/* Profile */}
+          {/* 5. Profile */}
           <TouchableOpacity
             style={styles.navItem}
             activeOpacity={0.7}
@@ -1507,6 +1679,124 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* ======================================================== */}
+      {/* 8. ASK SENSOO AGENTIC AI INTERACTIVE MODAL */}
+      {/* ======================================================== */}
+      <Modal
+        visible={showAgentModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAgentModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.agentModalOverlay}
+        >
+          <View style={styles.agentModalCard}>
+            {/* Modal Header */}
+            <View style={styles.agentModalHeader}>
+              <View style={styles.agentHeaderLeft}>
+                <View style={styles.agentHeaderAvatar}>
+                  <Image
+                    source={require('../../assets/sensoo_ai_robot.jpg')}
+                    style={styles.agentHeaderRobotImg}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.agentOnlineDot} />
+                </View>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.agentHeaderTitle}>Sensoo AI</Text>
+                    <View style={styles.agentVerifiedBadge}>
+                      <Text style={styles.agentVerifiedBadgeText}>AGENTIC</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.agentHeaderSub}>24/7 Counterfeit & Safety Assistant</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.agentCloseBtn}
+                onPress={() => setShowAgentModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.agentCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Suggestions Chips */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.agentSuggestionsRow}
+            >
+              {[
+                'Is Panadol Extra safe to buy?',
+                'Find nearby clinics in Lagos',
+                'How to spot fake cosmetics?',
+                'Report a suspicious pharmacy',
+              ].map((suggestion) => (
+                <TouchableOpacity
+                  key={suggestion}
+                  style={styles.agentSuggestionChip}
+                  activeOpacity={0.7}
+                  onPress={() => handleSendAgentQuery(suggestion)}
+                >
+                  <Text style={styles.agentSuggestionText}>{suggestion}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Chat History */}
+            <ScrollView
+              style={styles.agentChatScroll}
+              contentContainerStyle={styles.agentChatContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {agentChat.map((msg, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.agentChatBubble,
+                    msg.sender === 'user'
+                      ? styles.agentUserBubble
+                      : styles.agentBotBubble,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.agentChatText,
+                      msg.sender === 'user' && styles.agentUserChatText,
+                    ]}
+                  >
+                    {msg.text}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Input Bar */}
+            <View style={styles.agentInputBar}>
+              <TextInput
+                style={styles.agentTextInput}
+                placeholder="Ask about a drug, clinic, or report..."
+                placeholderTextColor="#94A3B8"
+                value={agentInput}
+                onChangeText={setAgentInput}
+                onSubmitEditing={() => handleSendAgentQuery()}
+              />
+              <TouchableOpacity
+                style={styles.agentSendBtn}
+                activeOpacity={0.8}
+                onPress={() => handleSendAgentQuery()}
+              >
+                <Text style={styles.agentSendIcon}>➤</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1537,7 +1827,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   bellButton: {
     width: 40,
@@ -2374,5 +2664,548 @@ const styles = StyleSheet.create({
   },
   navDotHidden: {
     opacity: 0,
+  },
+
+  /* Reports Tab Screen Styles */
+  reportsFilterPillsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  reportsFilterChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  reportsFilterChipActive: {
+    backgroundColor: '#064E3B',
+  },
+  reportsFilterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  reportsFilterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  reportListItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  reportItemThumbBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reportItemThumbImg: {
+    width: 36,
+    height: 36,
+  },
+  reportItemMetaBox: {
+    flex: 1,
+  },
+  reportItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  reportItemDate: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  reportItemStatusCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  reportItemStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  reportItemStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  reportItemChevron: {
+    fontSize: 18,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+
+  /* ======================================================== */
+  /* ASK SENSOO (AGENTIC AI) HERO BANNER STYLES */
+  /* ======================================================== */
+  aiAgentBannerCard: {
+    backgroundColor: '#EDFBF4',
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 16,
+    marginBottom: 22,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  aiBannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  aiBannerTextCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  aiBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    marginBottom: 8,
+    gap: 4,
+  },
+  aiBadgeStar: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '800',
+  },
+  aiBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.8,
+  },
+  aiBannerTitle: {
+    fontSize: 23,
+    fontWeight: '800',
+    lineHeight: 28,
+    marginBottom: 6,
+  },
+  aiBannerTitleDark: {
+    color: '#064E3B',
+  },
+  aiBannerTitleGreen: {
+    color: '#059669',
+  },
+  aiBannerSubtitle: {
+    fontSize: 12.5,
+    color: '#374151',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  aiBannerVisualBox: {
+    position: 'relative',
+    width: 86,
+    height: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiRobotWrapper: {
+    width: 76,
+    height: 76,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#34D399',
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  aiRobotImg: {
+    width: '100%',
+    height: '100%',
+  },
+  aiVoiceBubble: {
+    position: 'absolute',
+    top: -4,
+    left: -6,
+    backgroundColor: '#059669',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  aiVoiceBars: {
+    fontSize: 9,
+    color: '#FFFFFF',
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  aiChevronCircle: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  aiChevronArrow: {
+    fontSize: 16,
+    color: '#059669',
+    fontWeight: '700',
+    marginTop: -2,
+    marginLeft: 1,
+  },
+  aiActionPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 14,
+  },
+  aiActionPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  aiActionPillIcon: {
+    fontSize: 13,
+  },
+  aiActionPillLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+
+  /* ======================================================== */
+  /* SCAN RETICLE ICON & AGENT ICON IN BOTTOM NAV */
+  /* ======================================================== */
+  navScanFrameIcon: {
+    width: 22,
+    height: 22,
+    position: 'relative',
+    marginBottom: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanReticleCornerTL: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    width: 6,
+    height: 6,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: '#8A9C91',
+    borderTopLeftRadius: 2,
+  },
+  scanReticleCornerTR: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderColor: '#8A9C91',
+    borderTopRightRadius: 2,
+  },
+  scanReticleCornerBL: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    width: 6,
+    height: 6,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: '#8A9C91',
+    borderBottomLeftRadius: 2,
+  },
+  scanReticleCornerBR: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderColor: '#8A9C91',
+    borderBottomRightRadius: 2,
+  },
+  scanReticleCenterDot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: '#8A9C91',
+  },
+  navAgentBox: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 34,
+    height: 30,
+    marginBottom: 3,
+  },
+  navAgentPulseRing: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+  },
+  navAgentCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  navAgentStarGlyph: {
+    fontSize: 13,
+    color: '#059669',
+    fontWeight: '800',
+    marginTop: -1,
+  },
+  navAgentRedDot: {
+    position: 'absolute',
+    top: -1,
+    right: 2,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    zIndex: 2,
+  },
+
+  /* ======================================================== */
+  /* ASK SENSOO INTERACTIVE MODAL STYLES */
+  /* ======================================================== */
+  agentModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  agentModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 18,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingHorizontal: 18,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  agentModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  agentHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  agentHeaderAvatar: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#34D399',
+  },
+  agentHeaderRobotImg: {
+    width: '100%',
+    height: '100%',
+  },
+  agentOnlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  agentHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  agentVerifiedBadge: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  agentVerifiedBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.5,
+  },
+  agentHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  agentCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agentCloseText: {
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  agentSuggestionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  agentSuggestionChip: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  agentSuggestionText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  agentChatScroll: {
+    maxHeight: 280,
+    marginVertical: 8,
+  },
+  agentChatContent: {
+    paddingVertical: 8,
+    gap: 10,
+  },
+  agentChatBubble: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    maxWidth: '85%',
+  },
+  agentUserBubble: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#059669',
+    borderBottomRightRadius: 4,
+  },
+  agentBotBubble: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    borderBottomLeftRadius: 4,
+  },
+  agentChatText: {
+    fontSize: 13.5,
+    color: '#1E293B',
+    lineHeight: 19,
+  },
+  agentUserChatText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  agentInputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  agentTextInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+    paddingVertical: 6,
+  },
+  agentSendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  agentSendIcon: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 });
