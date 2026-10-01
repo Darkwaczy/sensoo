@@ -160,7 +160,10 @@ def _guess_region(lat: float, lng: float) -> str:
 def seed_demo_data() -> None:
     """Load a few realistic codes and previous scans so the demo is not empty."""
     engine = get_engine()
+    if hasattr(engine, "clear"):
+        engine.clear()
 
+    # 1. Dove Body Wash 250ml (Sample Code)
     engine.register_code(
         "UNL-9X4-B2P",
         region="NG",
@@ -181,6 +184,68 @@ def seed_demo_data() -> None:
         rec["state"] = "IN_STOCK"
         engine.update_code("UNL-9X4-B2P", rec)
 
+    # 2. Dr. Rashel Face Care 50ml (Item No: DRL-1431 / Barcode: 6971764150130)
+    for drl_code in ["6971764150130", "DRL-1431"]:
+        engine.register_code(
+            drl_code,
+            region="NG",
+            batch_id="BATCH-DRL-1431",
+            product_name="Dr. Rashel Face Care 50ml",
+            manufacturer="Yiwu Rashel Trading Co., Ltd"
+        )
+        engine.append_scan(drl_code, {
+            "role": "merchant",
+            "lat": 6.5244,
+            "lng": 3.3792,
+            "timestamp": "2026-10-01T08:30:00Z",
+            "alarms": [],
+            "device_id": "merchant-lagos-01",
+        })
+        drl_rec = engine.get_code(drl_code)
+        if drl_rec:
+            drl_rec["state"] = "IN_STOCK"
+            engine.update_code(drl_code, drl_rec)
+
+    # 3. Panadol Extra 500mg (Barcode: 5000158105224)
+    engine.register_code(
+        "5000158105224",
+        region="NG",
+        batch_id="BATCH-2026-B4",
+        product_name="Panadol Extra Tablets 500mg",
+        manufacturer="GSK Consumer Healthcare / Haleon"
+    )
+    pan_rec = engine.get_code("5000158105224")
+    if pan_rec:
+        pan_rec["state"] = "IN_STOCK"
+        engine.update_code("5000158105224", pan_rec)
+
+    # 4. Dove Body Wash EAN (Barcode: 8999990012345)
+    engine.register_code(
+        "8999990012345",
+        region="NG",
+        batch_id="BATCH-2026-DV1",
+        product_name="Dove Body Wash Deep Moisture 250ml",
+        manufacturer="Unilever Nigeria"
+    )
+    dove_rec = engine.get_code("8999990012345")
+    if dove_rec:
+        dove_rec["state"] = "IN_STOCK"
+        engine.update_code("8999990012345", dove_rec)
+
+    # 5. CeraVe Foaming Cleanser (Barcode: 3606000537008)
+    engine.register_code(
+        "3606000537008",
+        region="NG",
+        batch_id="BATCH-2026-CV40",
+        product_name="CeraVe Foaming Cleanser 473ml",
+        manufacturer="L'Oréal Dermatological"
+    )
+    cer_rec = engine.get_code("3606000537008")
+    if cer_rec:
+        cer_rec["state"] = "IN_STOCK"
+        engine.update_code("3606000537008", cer_rec)
+
+    # 6. Cloned / Already Purchased Alarm Demo (UNL-CLONE-01)
     engine.register_code(
         "UNL-CLONE-01",
         region="NG",
@@ -201,6 +266,7 @@ def seed_demo_data() -> None:
         rec["state"] = "PURCHASED_RETIRED"
         engine.update_code("UNL-CLONE-01", rec)
 
+    # 7. Speed / Impossible Physics Demo (UNL-FAST-99)
     engine.register_code(
         "UNL-FAST-99",
         region="NG",

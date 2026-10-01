@@ -87,3 +87,11 @@ def get_feed(limit: int = Query(20, ge=1, le=100)) -> List[FeedItem]:
 def health() -> dict:
     """Simple liveness check so the team can confirm the service is up."""
     return {"status": "ok", "service": "sensoo"}
+
+
+@app.post("/reset")
+def reset_database() -> dict:
+    """Reset all demo codes, products, and scan histories back to clean IN_STOCK state."""
+    seed_demo_data()
+    return {"status": "ok", "message": "Demo database successfully reset to clean stock"}
+

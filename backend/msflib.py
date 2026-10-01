@@ -16,6 +16,11 @@ class Engine:
         self.config = config or {}
         self._storage: Dict[str, Any] = {}  # in-memory stand-in for real storage
 
+    def clear(self) -> None:
+        """Clear all stored codes and reset the mock database."""
+        self._storage.clear()
+
+
     def register_code(
         self,
         code: str,
