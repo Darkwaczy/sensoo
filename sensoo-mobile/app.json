@@ -2,6 +2,7 @@
   "expo": {
     "name": "sensoo-mobile",
     "slug": "sensoo-mobile",
+    "owner": "ingsetch",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.sensoomobile"
     },
     "plugins": [
       "expo-router",
@@ -33,6 +35,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "457e743f-898a-4d0c-b967-68c59da5a838"
+      }
     }
   }
 }

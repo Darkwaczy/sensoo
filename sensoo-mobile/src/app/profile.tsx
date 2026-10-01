@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
+import {
+  getVoiceAssistantSettings,
+  subscribeVoiceAssistantSettings,
+  VoiceAssistantSettings,
+} from '../services/voiceAssistantService';
+
 export default function ProfileScreen() {
   const router = useRouter();
 
+  const [voiceSettings, setVoiceSettings] = useState<VoiceAssistantSettings>(getVoiceAssistantSettings());
   const [showPersonalInfoModal, setShowPersonalInfoModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeVoiceAssistantSettings((s) => setVoiceSettings(s));
+    return unsub;
+  }, []);
 
   const handleLogout = () => {
     Alert.alert(
@@ -151,7 +163,45 @@ export default function ProfileScreen() {
             <Text style={styles.menuChevron}>›</Text>
           </TouchableOpacity>
 
-          {/* 5. About Sensoo */}
+          {/* 5. Voice Assistant ("Hey Sensoo") */}
+          <TouchableOpacity
+            style={styles.menuItemCard}
+            activeOpacity={0.75}
+            onPress={() => router.push('/voice-assistant' as any)}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#ECFDF5' }]}>
+              <Text style={{ fontSize: 18 }}>🎙️</Text>
+            </View>
+            <View style={styles.menuMeta}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.menuTitle}>Voice Assistant</Text>
+                <View
+                  style={{
+                    backgroundColor: voiceSettings.enabled ? '#ECFDF5' : '#F1F5F9',
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: voiceSettings.enabled ? '#A7F3D0' : '#E2E8F0',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '700',
+                      color: voiceSettings.enabled ? '#059669' : '#64748B',
+                    }}
+                  >
+                    {voiceSettings.enabled ? 'Ready 🟢' : 'Off'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.menuSubtitle}>"Hey Sensoo" hands-free & voiceprint</Text>
+            </View>
+            <Text style={styles.menuChevron}>›</Text>
+          </TouchableOpacity>
+
+          {/* 6. About Sensoo */}
           <TouchableOpacity
             style={styles.menuItemCard}
             activeOpacity={0.75}

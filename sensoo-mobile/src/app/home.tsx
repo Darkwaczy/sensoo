@@ -17,7 +17,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Speech from 'expo-speech';
 import { sendAgentMessage } from '../services/sensooAiService';
+import {
+  getVoiceAssistantSettings,
+  subscribeVoiceAssistantSettings,
+  parseVoiceCommand,
+  VoiceAssistantSettings,
+} from '../services/voiceAssistantService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -395,8 +402,82 @@ export default function HomeScreen() {
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [agentInput, setAgentInput] = useState('');
 
+  // Voice Assistant ("Hey Sensoo") State & Foreground Listener
+  const [voiceSettings, setVoiceSettings] = useState<VoiceAssistantSettings>(getVoiceAssistantSettings());
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const unsub = subscribeVoiceAssistantSettings((s) => setVoiceSettings(s));
+    return unsub;
+  }, []);
+
+  const activateVoiceAssistant = () => {
+    setShowVoiceListenerModal(true);
+    setVoiceNotice('🎙️ Listening...');
+    try {
+      Speech.stop();
+      Speech.speak('Yes Kingsley, what can I do for you right now?', {
+        language: 'en-US',
+        pitch: 1.05,
+        rate: 0.95,
+      });
+    } catch (e) {
+      console.warn('Speech error:', e);
+    }
+  };
+
+  const handleVoiceCommand = (rawSpeech: string) => {
+    const cmd = rawSpeech.trim();
+    if (!cmd) return;
+    const parsed = parseVoiceCommand(cmd);
+
+    setVoiceNotice(`⚡ ${parsed.actionSummary || 'Executing...'}`);
+    setTimeout(() => setVoiceNotice(null), 3500);
+
+    if (parsed.intent === 'SCAN') {
+      try {
+        Speech.stop();
+        Speech.speak('Opening camera scanner right away.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+      } catch {}
+      setTimeout(() => router.push('/scanner'), 600);
+    } else if (parsed.intent === 'CLINIC') {
+      try {
+        Speech.stop();
+        Speech.speak('Finding accredited clinics near you.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+      } catch {}
+      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } }), 600);
+    } else if (parsed.intent === 'REPORT') {
+      try {
+        Speech.stop();
+        Speech.speak('Opening NAFDAC counterfeit report intake.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+      } catch {}
+      setTimeout(() => router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } }), 600);
+    } else if (parsed.intent === 'HISTORY') {
+      try {
+        Speech.stop();
+        Speech.speak('Opening your previous scan history.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+      } catch {}
+      setActiveView('RecentScans');
+    } else if (parsed.intent === 'GUIDANCE') {
+      try {
+        Speech.stop();
+        Speech.speak('Opening AI safety guidance.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+      } catch {}
+      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'safety_guidance' } }), 600);
+    } else {
+      try {
+        Speech.stop();
+        Speech.speak('Checking that with Sensoo AI.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+      } catch {}
+      setTimeout(() => router.push({ pathname: '/agent', params: { query: cmd } }), 600);
+    }
+  };
+
   // Continuous pulsating ripple animation for Agent nav button
   const agentPulseValue = React.useRef(new Animated.Value(0)).current;
+
+  const [showVoiceListenerModal, setShowVoiceListenerModal] = useState(false);
+  const [voiceListenerSpokenText, setVoiceListenerSpokenText] = useState('');
 
   React.useEffect(() => {
     const pulseAnim = Animated.loop(
@@ -414,7 +495,10 @@ export default function HomeScreen() {
       ])
     );
     pulseAnim.start();
-    return () => pulseAnim.stop();
+
+    return () => {
+      pulseAnim.stop();
+    };
   }, [agentPulseValue]);
 
   const [agentChat, setAgentChat] = useState<{ sender: 'agent' | 'user'; text: string }[]>([
@@ -1117,7 +1201,45 @@ export default function HomeScreen() {
                 <Text style={styles.profileMenuChevron}>›</Text>
               </TouchableOpacity>
 
-              {/* Item 5: About Sensoo */}
+              {/* Item 5: Voice Assistant ("Hey Sensoo") */}
+              <TouchableOpacity
+                style={styles.profileMenuItemCard}
+                activeOpacity={0.75}
+                onPress={() => router.push('/voice-assistant' as any)}
+              >
+                <View style={[styles.profileMenuIconBox, { backgroundColor: '#ECFDF5' }]}>
+                  <Text style={{ fontSize: 18 }}>🎙️</Text>
+                </View>
+                <View style={styles.profileMenuMeta}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.profileMenuTitle}>Voice Assistant</Text>
+                    <View
+                      style={{
+                        backgroundColor: voiceSettings.enabled ? '#ECFDF5' : '#F1F5F9',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: voiceSettings.enabled ? '#A7F3D0' : '#E2E8F0',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '700',
+                          color: voiceSettings.enabled ? '#059669' : '#64748B',
+                        }}
+                      >
+                        {voiceSettings.enabled ? 'Ready 🟢' : 'Off'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.profileMenuSubtitle}>"Hey Sensoo" hands-free & voiceprint</Text>
+                </View>
+                <Text style={styles.profileMenuChevron}>›</Text>
+              </TouchableOpacity>
+
+              {/* Item 6: About Sensoo */}
               <TouchableOpacity
                 style={styles.profileMenuItemCard}
                 activeOpacity={0.75}
@@ -1521,6 +1643,37 @@ export default function HomeScreen() {
       </Modal>
 
       {/* ======================================================== */}
+      {/* FLOATING "HEY SENSOO" COMMAND EXECUTION BANNER */}
+      {/* ======================================================== */}
+      {voiceNotice && (
+        <View style={styles.voiceFloatingBanner}>
+          <View style={styles.voiceFloatingGlowRing}>
+            <Text style={{ fontSize: 13 }}>🎙️</Text>
+          </View>
+          <Text style={styles.voiceFloatingBannerText}>{voiceNotice}</Text>
+        </View>
+      )}
+
+      {/* ======================================================== */}
+      {/* FLOATING QUICK VOICE COMMANDER BUTTON */}
+      {/* ======================================================== */}
+      {voiceSettings.enabled && (
+        <TouchableOpacity
+          style={styles.heartPumpFloatingBtn}
+          activeOpacity={0.85}
+          onPress={activateVoiceAssistant}
+        >
+          <View style={styles.heartPumpInnerCircle}>
+            <Text style={{ fontSize: 20 }}>🎙️</Text>
+          </View>
+          <View style={styles.heartPumpBadgePill}>
+            <View style={styles.heartPumpLiveDot} />
+            <Text style={styles.heartPumpBadgeText}>Hey Sensoo</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* ======================================================== */}
       {/* PERMANENT BOTTOM NAVIGATION BAR */}
       {/* ======================================================== */}
       <SafeAreaView style={styles.bottomSafeArea} edges={['bottom']}>
@@ -1679,6 +1832,78 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* ======================================================== */}
+      {/* 7. HEART-PUMP "HEY SENSOO" INTERACTIVE LISTENER MODAL */}
+      {/* ======================================================== */}
+      <Modal
+        visible={showVoiceListenerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVoiceListenerModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.heartPumpModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowVoiceListenerModal(false)}
+        >
+          <View style={styles.heartPumpModalCard}>
+            <TouchableOpacity
+              style={styles.heartPumpModalClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={() => setShowVoiceListenerModal(false)}
+            >
+              <Text style={{ fontSize: 18, color: '#94A3B8', fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Voice Commander Header Visual */}
+            <View style={styles.heartPumpVisualContainer}>
+              <View style={styles.heartPumpCoreCircle}>
+                <Text style={{ fontSize: 34 }}>🎙️</Text>
+              </View>
+            </View>
+
+            <Text style={styles.heartPumpModalTitle}>Hey Sensoo!</Text>
+            <Text style={styles.heartPumpModalSubtitle}>
+              "Yes Kingsley, what can I do for you right now?"
+            </Text>
+
+            {/* Direct Speech / Text Command Input */}
+            <View style={styles.heartPumpInputRow}>
+              <TextInput
+                style={styles.heartPumpInput}
+                placeholder="Say or type command (e.g. Open scanner)..."
+                placeholderTextColor="#94A3B8"
+                autoFocus
+                value={voiceListenerSpokenText}
+                onChangeText={setVoiceListenerSpokenText}
+                onSubmitEditing={() => {
+                  if (voiceListenerSpokenText.trim()) {
+                    const cmd = voiceListenerSpokenText.trim();
+                    setVoiceListenerSpokenText('');
+                    setShowVoiceListenerModal(false);
+                    handleVoiceCommand(cmd);
+                  }
+                }}
+              />
+              <TouchableOpacity
+                style={styles.heartPumpInputSendBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (voiceListenerSpokenText.trim()) {
+                    const cmd = voiceListenerSpokenText.trim();
+                    setVoiceListenerSpokenText('');
+                    setShowVoiceListenerModal(false);
+                    handleVoiceCommand(cmd);
+                  }
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>➤</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ======================================================== */}
       {/* 8. ASK SENSOO AGENTIC AI INTERACTIVE MODAL */}
@@ -3207,5 +3432,223 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+
+  /* Floating Siri / Voice Command Banner */
+  voiceFloatingBanner: {
+    position: 'absolute',
+    bottom: 90,
+    alignSelf: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#059669',
+    zIndex: 999,
+  },
+  voiceFloatingGlowRing: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#064E3B',
+    borderWidth: 1.5,
+    borderColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceFloatingBannerText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  /* Floating Heart-Pump Siri Button */
+  heartPumpFloatingBtn: {
+    position: 'absolute',
+    bottom: 86,
+    right: 18,
+    width: 62,
+    height: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 998,
+  },
+  heartPumpPulseRing: {
+    position: 'absolute',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#10B981',
+  },
+  heartPumpInnerCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#064E3B',
+    borderWidth: 2,
+    borderColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  heartPumpBadgePill: {
+    position: 'absolute',
+    top: -8,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#34D399',
+  },
+  heartPumpLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  heartPumpBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+
+  /* Heart-Pump Interactive Listener Modal */
+  heartPumpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  heartPumpModalCard: {
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 22,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  heartPumpModalClose: {
+    position: 'absolute',
+    top: 14,
+    right: 16,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heartPumpVisualContainer: {
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+    position: 'relative',
+  },
+  heartPumpAuraRing: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+  },
+  heartPumpCoreCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#064E3B',
+    borderWidth: 3,
+    borderColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  heartPumpModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  heartPumpModalSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  heartPumpChipsGrid: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 16,
+  },
+  heartPumpChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  heartPumpChipIcon: {
+    fontSize: 15,
+  },
+  heartPumpChipText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#064E3B',
+    flex: 1,
+  },
+  heartPumpInputRow: {
+    flexDirection: 'row',
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  heartPumpInput: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#0F172A',
+    paddingVertical: 8,
+  },
+  heartPumpInputSendBtn: {
+    backgroundColor: '#059669',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
 });

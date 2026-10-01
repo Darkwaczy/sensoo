@@ -18,6 +18,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
 import { sendAgentMessage } from '../services/sensooAiService';
+import { parseVoiceCommand } from '../services/voiceAssistantService';
 
 type AgentScreen =
   | 'home'
@@ -516,6 +517,22 @@ export default function AgentScreenComponent() {
   const handleVoicePrompt = async (promptText: string) => {
     const cleanPrompt = promptText.trim();
     if (!cleanPrompt) return;
+
+    const parsed = parseVoiceCommand(cleanPrompt);
+    if (parsed.hasWakeWord) {
+      if (parsed.intent === 'SCAN') {
+        setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 200);
+        return;
+      }
+      if (parsed.intent === 'CLINIC') {
+        setCurrentScreen('clinics');
+        return;
+      }
+      if (parsed.intent === 'GUIDANCE') {
+        setCurrentScreen('safety_guidance');
+        return;
+      }
+    }
 
     setVoiceUserPrompt(cleanPrompt);
     setVoiceStatus('thinking');
