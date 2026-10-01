@@ -171,7 +171,14 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
 
 export default function ResultScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ scenario?: string; code?: string }>();
+  const params = useLocalSearchParams<{
+    scenario?: string;
+    code?: string;
+    productName?: string;
+    manufacturer?: string;
+    batchId?: string;
+    reason?: string;
+  }>();
 
   // Determine initial scenario from param or match from code
   const getInitialScenario = (): ScenarioType => {
@@ -188,7 +195,27 @@ export default function ResultScreen() {
   };
 
   const [activeScenario, setActiveScenario] = useState<ScenarioType>(getInitialScenario);
-  const config = SCENARIOS[activeScenario];
+  const baseConfig = SCENARIOS[activeScenario];
+  const config = {
+    ...baseConfig,
+    subtitle: params.reason || baseConfig.subtitle,
+    productName: params.productName || baseConfig.productName,
+    details: baseConfig.details.map((d) => {
+      if (d.label === 'Brand' && params.productName) {
+        return { ...d, value: params.productName.split(' ')[0] };
+      }
+      if (d.label === 'Manufacturer' && params.manufacturer) {
+        return { ...d, value: params.manufacturer };
+      }
+      if (d.label === 'Batch Number' && params.batchId) {
+        return { ...d, value: params.batchId };
+      }
+      if (d.label === 'Barcode' && params.code) {
+        return { ...d, value: params.code };
+      }
+      return d;
+    }),
+  };
 
   const handleSecondaryAction = () => {
     if (activeScenario === 'COUNTERFEIT' || activeScenario === 'IMPOSSIBLE_TRAVEL') {

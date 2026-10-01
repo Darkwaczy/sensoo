@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { verifyScanOnline, ScanApiResponse } from '../services/sensooApiService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -157,6 +158,17 @@ export default function CheckingScreen() {
 
     setVerdict(computedVerdict);
 
+    let apiResponse: ScanApiResponse | null = null;
+
+    // Trigger real backend verification in background with live API
+    verifyScanOnline(scannedCode)
+      .then((res) => {
+        apiResponse = res;
+      })
+      .catch((err) => {
+        console.warn('Using offline verification fallback:', err);
+      });
+
     // Timed step progression
     const timer1 = setTimeout(() => {
       setCurrentStep(2); // Step 1 done, Step 2 active
@@ -198,29 +210,70 @@ export default function CheckingScreen() {
         | 'AUTHENTIC'
         | 'WRONG_REGION' = 'AUTHENTIC';
 
-      if (scannedCode.includes('FAKE') || scannedCode === 'SNS-FAKE-0000') {
-        scenario = 'COUNTERFEIT';
-      } else if (scannedCode.includes('8832') || scannedCode === 'SNS-MED-8832') {
-        scenario = 'ALREADY_PURCHASED';
-      } else if (
-        scannedCode.includes('SPEED') ||
-        scannedCode.includes('PHYSICS') ||
-        scannedCode === 'SNS-SPEED-9999'
-      ) {
-        scenario = 'IMPOSSIBLE_TRAVEL';
-      } else if (scannedCode.includes('1099') || scannedCode === 'SNS-BABY-1099') {
-        scenario = 'WRONG_REGION';
+      let resolvedName = computedVerdict.name;
+      let resolvedBrand = computedVerdict.brand;
+      let resolvedBatch = computedVerdict.batch;
+      let resolvedReason = computedVerdict.description;
+
+      if (apiResponse) {
+        if (apiResponse.status === 'AUTHENTIC') {
+          scenario = 'AUTHENTIC';
+        } else {
+          const alarms = apiResponse.alarms || [];
+          if (alarms.includes('ALREADY_PURCHASED')) {
+            scenario = 'ALREADY_PURCHASED';
+          } else if (
+            alarms.includes('IMPOSSIBLE_PHYSICS') ||
+            alarms.includes('IMPOSSIBLE_TRAVEL')
+          ) {
+            scenario = 'IMPOSSIBLE_TRAVEL';
+          } else if (alarms.includes('WRONG_REGION')) {
+            scenario = 'WRONG_REGION';
+          } else {
+            scenario = 'COUNTERFEIT';
+          }
+        }
+        if (apiResponse.product_name) resolvedName = apiResponse.product_name;
+        if (apiResponse.manufacturer) resolvedBrand = apiResponse.manufacturer;
+        if (apiResponse.batch_id) resolvedBatch = apiResponse.batch_id;
+        if (apiResponse.reason) resolvedReason = apiResponse.reason;
+      } else {
+        if (scannedCode.includes('FAKE') || scannedCode === 'SNS-FAKE-0000') {
+          scenario = 'COUNTERFEIT';
+        } else if (scannedCode.includes('8832') || scannedCode === 'SNS-MED-8832') {
+          scenario = 'ALREADY_PURCHASED';
+        } else if (
+          scannedCode.includes('SPEED') ||
+          scannedCode.includes('PHYSICS') ||
+          scannedCode === 'SNS-SPEED-9999'
+        ) {
+          scenario = 'IMPOSSIBLE_TRAVEL';
+        } else if (scannedCode.includes('1099') || scannedCode === 'SNS-BABY-1099') {
+          scenario = 'WRONG_REGION';
+        }
       }
 
       if (params.origin === 'chat') {
         router.replace({
           pathname: '/agent',
-          params: { scenario, scanCode: scannedCode, productName: computedVerdict.name, origin: 'chat_return' },
+          params: {
+            scenario,
+            scanCode: scannedCode,
+            productName: resolvedName,
+            origin: 'chat_return',
+          },
         });
       } else {
         router.replace({
           pathname: '/result',
-          params: { scenario, code: scannedCode },
+          params: {
+            scenario,
+            code: scannedCode,
+            productName: resolvedName,
+            manufacturer: resolvedBrand,
+            batchId: resolvedBatch,
+            reason: resolvedReason,
+          },
         });
       }
     }, 3600);
