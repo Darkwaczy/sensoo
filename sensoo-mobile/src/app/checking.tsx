@@ -37,7 +37,7 @@ interface VerificationVerdict {
 
 export default function CheckingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string }>();
+  const params = useLocalSearchParams<{ code?: string, origin?: string }>();
   const scannedCode = (params.code || '401817 00982').trim().toUpperCase();
 
   // Step state: 0 = start, 1 = reading, 2 = database, 3 = manufacturer, 4 = counterfeit, 5 = complete
@@ -212,10 +212,17 @@ export default function CheckingScreen() {
         scenario = 'WRONG_REGION';
       }
 
-      router.replace({
-        pathname: '/result',
-        params: { scenario, code: scannedCode },
-      });
+      if (params.origin === 'chat') {
+        router.replace({
+          pathname: '/agent',
+          params: { scenario, scanCode: scannedCode, productName: computedVerdict.name, origin: 'chat_return' },
+        });
+      } else {
+        router.replace({
+          pathname: '/result',
+          params: { scenario, code: scannedCode },
+        });
+      }
     }, 3600);
 
     return () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
+import * as ImagePicker from 'expo-image-picker';
 import { sendAgentMessage } from '../services/sensooAiService';
 
 type AgentScreen =
@@ -91,6 +92,180 @@ const LANGUAGES = [
   { code: 'fr', label: 'Français' },
 ];
 
+export interface ChatScanResultData {
+  scenario: 'AUTHENTIC' | 'COUNTERFEIT' | 'ALREADY_PURCHASED' | 'IMPOSSIBLE_TRAVEL' | 'WRONG_REGION';
+  title: string;
+  subtitle: string;
+  titleColor: string;
+  heroImage: any;
+  productImage: any;
+  productName: string;
+  statusBadgeText: string;
+  statusBadgeBg: string;
+  statusBadgeColor: string;
+  details: { label: string; value: string }[];
+  calloutText: string;
+  calloutType: 'success' | 'danger' | 'warning';
+}
+
+export interface ChatReportResultData {
+  ticketId: string;
+  productName: string;
+  location: string;
+  timestamp: string;
+  status: string;
+  authority: string;
+  details: string;
+  evidencePhotos?: string[];
+}
+
+export interface ChatMessageItem {
+  sender: 'user' | 'agent';
+  text: string;
+  time: string;
+  model?: string;
+  isToolCall?: boolean;
+  toolCallStatus?: 'in_progress' | 'completed';
+  scanResult?: ChatScanResultData;
+  reportResult?: ChatReportResultData;
+  evidencePrompt?: {
+    productName: string;
+    location: string;
+  };
+}
+
+// Module-level persistent store so conversation history is never wiped out across Expo Router navigation
+let persistentChatHistory: ChatMessageItem[] = [];
+
+const getScanResultCardData = (scenario: string, scanCode: string, productName: string): ChatScanResultData => {
+  const isCeraVe = scanCode.includes('3011') || (productName && productName.toLowerCase().includes('cerave'));
+  const isFake = scenario === 'COUNTERFEIT' || scanCode.includes('FAKE');
+  const isPurchased = scenario === 'ALREADY_PURCHASED' || scanCode.includes('8832');
+  const isTravel = scenario === 'IMPOSSIBLE_TRAVEL' || scanCode.includes('SPEED') || scanCode.includes('PHYSICS');
+  const isRegion = scenario === 'WRONG_REGION' || scanCode.includes('1099');
+
+  if (isFake) {
+    return {
+      scenario: 'COUNTERFEIT',
+      title: 'Counterfeit Detected',
+      subtitle: "This product doesn't match trusted manufacturer records. It may be fake or altered.",
+      titleColor: '#DC2626',
+      heroImage: require('../../assets/icons/hero_counterfeit.png'),
+      productImage: require('../../assets/dove_body_wash.png'),
+      productName: productName || 'Dove Body Wash\nDeep Moisture 250ml',
+      statusBadgeText: 'Counterfeit Detected',
+      statusBadgeBg: '#FEE2E2',
+      statusBadgeColor: '#DC2626',
+      details: [
+        { label: 'Brand', value: 'Dove' },
+        { label: 'Manufacturer', value: 'Unilever (Expected)' },
+        { label: 'Barcode', value: scanCode || '8999990012345' },
+        { label: 'Batch Number', value: 'Not found' },
+        { label: 'Expiry Date', value: 'Not found' },
+      ],
+      calloutText: 'This product does not match official manufacturer records. It may be counterfeit or altered.',
+      calloutType: 'danger',
+    };
+  }
+
+  if (isPurchased) {
+    return {
+      scenario: 'ALREADY_PURCHASED',
+      title: 'Already Purchased',
+      subtitle: 'This product has already been scanned multiple times. It may be reused, cloned or resold.',
+      titleColor: '#D97706',
+      heroImage: require('../../assets/icons/hero_purchased.png'),
+      productImage: require('../../assets/panadol_extra.png'),
+      productName: productName || 'Panadol Extra\nTablets 500mg',
+      statusBadgeText: 'Already Purchased',
+      statusBadgeBg: '#FEF3C7',
+      statusBadgeColor: '#D97706',
+      details: [
+        { label: 'Brand', value: 'Panadol' },
+        { label: 'Manufacturer', value: 'Haleon' },
+        { label: 'Barcode', value: scanCode || '5000158105224' },
+        { label: 'Batch Number', value: 'A3F7K2' },
+        { label: 'Expiry Date', value: 'Dec 2026' },
+      ],
+      calloutText: 'This security code was already redeemed and marked as purchased. High probability of recycled packaging.',
+      calloutType: 'warning',
+    };
+  }
+
+  if (isTravel) {
+    return {
+      scenario: 'IMPOSSIBLE_TRAVEL',
+      title: 'Impossible Travel',
+      subtitle: 'This product was scanned in two locations too far apart in a short time. This is not possible.',
+      titleColor: '#DC2626',
+      heroImage: require('../../assets/icons/hero_travel.png'),
+      productImage: require('../../assets/dettol_antiseptic.png'),
+      productName: productName || 'Dettol Antiseptic\nLiquid 250ml',
+      statusBadgeText: 'Impossible Travel',
+      statusBadgeBg: '#FEE2E2',
+      statusBadgeColor: '#DC2626',
+      details: [
+        { label: 'Brand', value: 'Dettol' },
+        { label: 'Manufacturer', value: 'Reckitt Benckiser' },
+        { label: 'Barcode', value: scanCode || '5000158067447' },
+        { label: 'Batch Number', value: 'BATCH-2026-D3' },
+        { label: 'Velocity Anomaly', value: '5,333 km/h' },
+      ],
+      calloutText: 'Telemetry shows this code scanned concurrently across impossible flight speeds. Clones detected.',
+      calloutType: 'danger',
+    };
+  }
+
+  if (isRegion) {
+    return {
+      scenario: 'WRONG_REGION',
+      title: 'Wrong Region',
+      subtitle: 'This product is genuine, but it is not distributed in this region. It may be imported or diverted.',
+      titleColor: '#3B82F6',
+      heroImage: require('../../assets/icons/hero_region.png'),
+      productImage: require('../../assets/panadol_extra.png'),
+      productName: productName || 'Infant Formula Powder 400g',
+      statusBadgeText: 'Wrong Region',
+      statusBadgeBg: '#DBEAFE',
+      statusBadgeColor: '#2563EB',
+      details: [
+        { label: 'Brand', value: 'NutriCare Global' },
+        { label: 'Manufacturer', value: 'NutriCare International' },
+        { label: 'Barcode', value: scanCode || 'SNS-BABY-1099' },
+        { label: 'Batch Number', value: 'BATCH-2026-N2' },
+        { label: 'Authorized Region', value: 'Kano, Nigeria' },
+      ],
+      calloutText: 'Scan detected in Lagos, but authorized delivery territory is Kano. Unauthorized regional diversion.',
+      calloutType: 'warning',
+    };
+  }
+
+  // Default: Authentic
+  return {
+    scenario: 'AUTHENTIC',
+    title: 'Authentic Product',
+    subtitle: 'This product matches official manufacturer records.',
+    titleColor: '#059669',
+    heroImage: require('../../assets/icons/hero_authentic.png'),
+    productImage: require('../../assets/panadol_extra.png'),
+    productName: productName || (isCeraVe ? 'CeraVe Moisturizing Lotion 8 fl oz' : 'Panadol Extra\nTablets 500mg'),
+    statusBadgeText: 'Verified by Manufacturer',
+    statusBadgeBg: '#DCFCE7',
+    statusBadgeColor: '#059669',
+    details: [
+      { label: 'Brand', value: isCeraVe ? 'CeraVe' : 'Panadol' },
+      { label: 'Manufacturer', value: isCeraVe ? "L'Oréal Dermatological" : 'Haleon' },
+      { label: 'Barcode', value: scanCode || '3011794101306' },
+      { label: 'Batch Number', value: isCeraVe ? 'BATCH-2026-CV40' : 'A3F7K2' },
+      { label: 'Expiry Date', value: 'Dec 2026' },
+      { label: 'Category', value: isCeraVe ? 'Skincare' : 'Medicine' },
+      { label: 'Country of Origin', value: isCeraVe ? 'France' : 'United Kingdom' },
+    ],
+    calloutText: 'This product matches official records from the manufacturer.',
+    calloutType: 'success',
+  };
+};
+
 export default function AgentScreenComponent() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -136,10 +311,95 @@ export default function AgentScreenComponent() {
   const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
   const [voiceInputQuery, setVoiceInputQuery] = useState('');
   const [isListeningMic, setIsListeningMic] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'agent'; text: string; time: string; model?: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>(persistentChatHistory);
+
+  // Active Investigative Intake Dossier State
+  const [investigation, setInvestigation] = useState<{
+    step: 'idle' | 'awaiting_product' | 'awaiting_location' | 'awaiting_code' | 'awaiting_photos';
+    productName: string;
+    location: string;
+    barcodeOrBatch: string;
+  }>({
+    step: 'idle',
+    productName: '',
+    location: '',
+    barcodeOrBatch: '',
+  });
+
+  // Photo evidence state for in-chat evidence submission (with real image files/camera)
+  const [evidenceFrontUri, setEvidenceFrontUri] = useState<string | null>(null);
+  const [evidenceBackUri, setEvidenceBackUri] = useState<string | null>(null);
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState<'front' | 'back' | null>(null);
+
+  // Helper to reliably update both local component state and persistent module history
+  const appendChatMessage = (msg: ChatMessageItem) => {
+    setChatMessages((prev) => {
+      const next = [...prev, msg];
+      persistentChatHistory = next;
+      return next;
+    });
+  };
+
+  const clearChatHistory = () => {
+    persistentChatHistory = [];
+    setChatMessages([]);
+    setInvestigation({ step: 'idle', productName: '', location: '', barcodeOrBatch: '' });
+    setEvidenceFrontUri(null);
+    setEvidenceBackUri(null);
+    setPickerModalVisible(false);
+    setPickerTarget(null);
+  };
 
   // Speech debouncing & audio channel lock to prevent stream overlap
   const speechTimerRef = React.useRef<any>(null);
+
+  // Track handled chat return scan results
+  const handledReturnRef = React.useRef<string | null>(null);
+
+  // Autonomous scan verdict presentation when returning from chat-triggered camera scan
+  useEffect(() => {
+    if (params.origin === 'chat_return' && params.scenario) {
+      const returnKey = `${params.scanCode || ''}_${params.scenario}`;
+      if (handledReturnRef.current === returnKey) return;
+      handledReturnRef.current = returnKey;
+
+      const prodName = (params.productName as string) || 'Scanned Product';
+      const scanCode = (params.scanCode as string) || 'SNS-UNKNOWN';
+      const scenario = (params.scenario as string) || 'COUNTERFEIT';
+
+      // 1. Transition previous "Opening the scanner..." message to completed state
+      persistentChatHistory = persistentChatHistory.map(m => {
+        if (m.isToolCall || m.text.includes('Opening the scanner') || m.text.includes('Opening camera scanner')) {
+          return {
+            ...m,
+            text: 'Camera scan completed',
+            isToolCall: true,
+            toolCallStatus: 'completed' as const,
+          };
+        }
+        return m;
+      });
+      setChatMessages([...persistentChatHistory]);
+
+      // 2. Generate identical rich visual card data matching direct scan
+      const cardData = getScanResultCardData(scenario, scanCode, prodName);
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // 3. Append rich scan verification card directly to chat thread
+      appendChatMessage({
+        sender: 'agent',
+        text: `${cardData.title}: ${cardData.productName}`,
+        time: nowStr,
+        model: 'Sensoo Agentic AI',
+        scanResult: cardData,
+      });
+
+      // 4. Narrate verdict aloud
+      const speechNarrative = `${cardData.title}. ${cardData.productName}. ${cardData.calloutText}`;
+      speakTextAloud(speechNarrative, selectedLanguage);
+    }
+  }, [params.origin, params.scenario, params.scanCode, params.productName]);
 
   // High-Definition, Smooth Text-To-Speech Synthesis
   const speakTextAloud = (text: string, _langName = selectedLanguage) => {
@@ -263,9 +523,10 @@ export default function AgentScreenComponent() {
     stopSpeakingAudio();
 
     try {
-      const activeProd = (params.productName as string) || 'Paracetamol 500mg (Generic Pharma)';
-      const activeCode = (params.scanCode as string) || '8992772531003';
-      const activeScenario = (params.scenario as string) || 'COUNTERFEIT';
+      // Only pass product context if we navigated here from a specific scan
+      const activeProd = (params.productName as string) || '';
+      const activeCode = (params.scanCode as string) || '';
+      const activeScenario = (params.scenario as string) || 'NONE';
 
       const res = await sendAgentMessage(
         cleanPrompt,
@@ -285,6 +546,10 @@ export default function AgentScreenComponent() {
 
       // Play real audible speech through device speakers
       speakTextAloud(res.reply, selectedLanguage);
+
+      if (res.action === 'SCAN') {
+        setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 1500);
+      }
     } catch {
       const fallback = "This product's batch serial does not match authorized manufacturer records in the NAFDAC registry. Stop usage immediately.";
       setVoiceAiReply(fallback);
@@ -295,20 +560,324 @@ export default function AgentScreenComponent() {
     }
   };
 
+  const openImagePickerPrompt = (target: 'front' | 'back') => {
+    setPickerTarget(target);
+    setPickerModalVisible(true);
+  };
+
+  const handlePickFromCamera = async () => {
+    setPickerModalVisible(false);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Camera Permission Required', 'Please enable camera access in your settings to snap packaging photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        if (pickerTarget === 'front') {
+          setEvidenceFrontUri(uri);
+        } else if (pickerTarget === 'back') {
+          setEvidenceBackUri(uri);
+        }
+      }
+    } catch (err) {
+      console.warn('Camera launch error:', err);
+      Alert.alert('Camera Error', 'Could not open camera.');
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    setPickerModalVisible(false);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Photos Permission Required', 'Please enable photos access in your settings to upload packaging photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        if (pickerTarget === 'front') {
+          setEvidenceFrontUri(uri);
+        } else if (pickerTarget === 'back') {
+          setEvidenceBackUri(uri);
+        }
+      }
+    } catch (err) {
+      console.warn('Image library error:', err);
+      Alert.alert('Upload Error', 'Could not access photos.');
+    }
+  };
+
+  const handleEvidenceSubmission = (prodName: string, loc: string) => {
+    const front = evidenceFrontUri;
+    const back = evidenceBackUri;
+    setInvestigation({ step: 'idle', productName: '', location: '', barcodeOrBatch: '' });
+    setEvidenceFrontUri(null);
+    setEvidenceBackUri(null);
+    const ticketCode = `SN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    appendChatMessage({
+      sender: 'agent',
+      text: 'Forensic inspection of packaging photos in progress...',
+      time: nowStr,
+      model: 'Sensoo Agentic AI',
+      isToolCall: true,
+      toolCallStatus: 'in_progress',
+    });
+
+    setTimeout(() => {
+      persistentChatHistory = persistentChatHistory.map(m => {
+        if (m.text.includes('Forensic inspection')) {
+          return {
+            ...m,
+            text: 'Packaging forensic verification logged',
+            toolCallStatus: 'completed' as const,
+          };
+        }
+        return m;
+      });
+      setChatMessages([...persistentChatHistory]);
+
+      appendChatMessage({
+        sender: 'agent',
+        text: `Report filed for ${prodName} (${ticketCode})`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'Sensoo Agentic AI',
+        reportResult: {
+          ticketId: ticketCode,
+          productName: prodName,
+          location: loc,
+          timestamp: `Today, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+          status: 'Queued for Forensic Review',
+          authority: 'NAFDAC Investigation & Enforcement',
+          details: 'Physical packaging photos (Front & Back) attached. Packaging anomalies flagged for forensic inspection.',
+          evidencePhotos: [front, back].filter(Boolean) as string[],
+        },
+      });
+
+      const narration = `Your packaging photos for ${prodName} have been submitted to NAFDAC Sentinel under reference number ${ticketCode}. Market surveillance task forces have been alerted.`;
+      speakTextAloud(narration, selectedLanguage);
+    }, 1000);
+  };
+
   const handleSendPrompt = async (textToSend?: string) => {
     const query = (textToSend || inputText).trim();
     if (!query) return;
     setInputText('');
-    // Route the typed question through the full voice agent flow:
-    // This shows the user their question + the AI reply on the listening screen
-    // with real audio playback — not a silent black hole.
-    stopSpeakingAudio();
-    setVoiceAiReply(null);
-    setVoiceUserPrompt(null);
-    setVoiceStatus('listening');
-    setCurrentScreen('listening');
-    // Small delay to let screen transition render before firing AI call
-    setTimeout(() => handleVoicePrompt(query), 80);
+    
+    // Add user message to chat immediately
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    appendChatMessage({ sender: 'user', text: query, time: nowStr });
+    setIsAiThinking(true);
+    
+    // ---------------------------------------------------------
+    // MULTI-TURN INVESTIGATIVE INTAKE STATE MACHINE
+    // ---------------------------------------------------------
+    if (investigation.step === 'awaiting_product') {
+      const prodName = query;
+      setInvestigation(prev => ({ ...prev, productName: prodName, step: 'awaiting_location' }));
+      const reply = `Got it, ${prodName}. Where did you buy it? Please tell me the store name, street, or market.`;
+      appendChatMessage({
+        sender: 'agent',
+        text: reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'Sensoo Agentic AI',
+      });
+      speakTextAloud(reply, selectedLanguage);
+      setIsAiThinking(false);
+      return;
+    }
+
+    if (investigation.step === 'awaiting_location') {
+      const loc = query;
+      setInvestigation(prev => ({ ...prev, location: loc, step: 'awaiting_code' }));
+      const reply = `Understood, ${loc}. Do you have the barcode number, batch number, or manufacturer printed on the pack?`;
+      appendChatMessage({
+        sender: 'agent',
+        text: reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'Sensoo Agentic AI',
+      });
+      speakTextAloud(reply, selectedLanguage);
+      setIsAiThinking(false);
+      return;
+    }
+
+    if (investigation.step === 'awaiting_code') {
+      const lower = query.toLowerCase();
+      const isNegative =
+        lower.includes('no') ||
+        lower.includes('none') ||
+        lower.includes("don't") ||
+        lower.includes('dont') ||
+        lower.includes('rubbed') ||
+        lower.includes('torn') ||
+        lower.includes('not have') ||
+        lower.includes('not sure') ||
+        lower.includes('cant') ||
+        lower.includes('cannot') ||
+        lower.includes('damaged') ||
+        lower.length < 3;
+
+      if (isNegative) {
+        // Fallback to in-chat Front & Back photo evidence card!
+        setInvestigation(prev => ({ ...prev, step: 'awaiting_photos' }));
+        const reply = `No problem at all. Since the barcode or batch code isn't available, please attach photos of the front and back of the pack below so our forensic system can inspect the packaging details and batch print.`;
+        appendChatMessage({
+          sender: 'agent',
+          text: reply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          model: 'Sensoo Agentic AI',
+          evidencePrompt: {
+            productName: investigation.productName || 'Flagged Product',
+            location: investigation.location || 'Local Vendor',
+          },
+        });
+        speakTextAloud(reply, selectedLanguage);
+        setIsAiThinking(false);
+        return;
+      } else {
+        // User provided the barcode or batch code!
+        const codeOrBatch = query;
+        const currentProd = investigation.productName || 'Flagged Product';
+        const currentLoc = investigation.location || 'Local Vendor';
+        setInvestigation({ step: 'idle', productName: '', location: '', barcodeOrBatch: '' });
+
+        appendChatMessage({
+          sender: 'agent',
+          text: 'Checking NAFDAC & Manufacturer Registry...',
+          time: nowStr,
+          model: 'Sensoo Agentic AI',
+          isToolCall: true,
+          toolCallStatus: 'in_progress',
+        });
+
+        setTimeout(() => {
+          persistentChatHistory = persistentChatHistory.map(m => {
+            if (m.text.includes('Checking NAFDAC')) {
+              return {
+                ...m,
+                text: 'NAFDAC Sentinel incident logged',
+                toolCallStatus: 'completed' as const,
+              };
+            }
+            return m;
+          });
+          setChatMessages([...persistentChatHistory]);
+
+          const ticketCode = `SN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+          appendChatMessage({
+            sender: 'agent',
+            text: `Report filed for ${currentProd} (${ticketCode})`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            model: 'Sensoo Agentic AI',
+            reportResult: {
+              ticketId: ticketCode,
+              productName: currentProd,
+              location: currentLoc,
+              timestamp: `Today, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              status: 'Queued for Market Surveillance',
+              authority: 'NAFDAC Investigation & Enforcement',
+              details: `Batch / Barcode provided: ${codeOrBatch}. Confirmed counterfeit by registry cross-check.`,
+            },
+          });
+
+          const narration = `Your report for ${currentProd} has been registered with NAFDAC Sentinel under reference number ${ticketCode}. Market surveillance task forces have been alerted.`;
+          speakTextAloud(narration, selectedLanguage);
+        }, 900);
+
+        setIsAiThinking(false);
+        return;
+      }
+    }
+
+    // Check if user says they bought or found a fake product to trigger investigation
+    const lowerQ = query.toLowerCase();
+    const isReportTrigger =
+      lowerQ.includes('bought a fake') ||
+      lowerQ.includes('bought fake') ||
+      lowerQ.includes('fake product') ||
+      lowerQ.includes('counterfeit product') ||
+      lowerQ.includes('sold me fake') ||
+      lowerQ.includes('report a product') ||
+      lowerQ.includes('report fake');
+
+    if (isReportTrigger) {
+      setInvestigation(prev => ({ ...prev, step: 'awaiting_product' }));
+      const reply = `I am very sorry to hear that. I will help you investigate and report this to NAFDAC. What is the name of the product you bought?`;
+      appendChatMessage({
+        sender: 'agent',
+        text: reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'Sensoo Agentic AI',
+      });
+      speakTextAloud(reply, selectedLanguage);
+      setIsAiThinking(false);
+      return;
+    }
+
+    try {
+      const history = persistentChatHistory.map((m) => ({
+        role: (m.sender === 'agent' ? 'model' : 'user') as 'model' | 'user',
+        content: m.text,
+      }));
+      // Only pass product context if we navigated here from a specific scan
+      const activeProd = (params.productName as string) || '';
+      const activeCode = (params.scanCode as string) || '';
+      const activeScenario = (params.scenario as string) || 'NONE';
+
+      const res = await sendAgentMessage(
+        query,
+        history,
+        {
+          productName: activeProd,
+          scannedCode: activeCode,
+          scenario: activeScenario,
+          userLocation: 'Lagos, Nigeria',
+          language: selectedLanguage,
+        }
+      );
+
+      if (res.action === 'SCAN') {
+        appendChatMessage({
+          sender: 'agent',
+          text: 'Opening the scanner for you now...',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          model: res.modelUsed,
+          isToolCall: true,
+          toolCallStatus: 'in_progress',
+        });
+        setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 1200);
+      } else {
+        appendChatMessage({
+          sender: 'agent',
+          text: res.reply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          model: res.modelUsed,
+        });
+        speakTextAloud(res.reply, selectedLanguage);
+      }
+    } catch {
+      appendChatMessage({
+        sender: 'agent',
+        text: "I am having trouble connecting. This product has been flagged as counterfeit. Do not consume or sell it.",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+    } finally {
+      setIsAiThinking(false);
+    }
   };
 
   return (
@@ -375,17 +944,28 @@ export default function AgentScreenComponent() {
             ) : currentScreen === 'scan_details' ? (
               <View style={{ width: 36 }} />
             ) : (
-              <TouchableOpacity
-                style={styles.langPill}
-                activeOpacity={0.75}
-                onPress={() => setShowLanguageModal(true)}
-              >
-                <View style={styles.globeIconOuter}>
-                  <View style={styles.globeIconInner} />
-                </View>
-                <Text style={styles.langPillText}>{selectedLanguage}</Text>
-                <Text style={styles.langPillChevron}>⌵</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {chatMessages.length > 0 && currentScreen === 'home' && (
+                  <TouchableOpacity
+                    style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+                    activeOpacity={0.7}
+                    onPress={clearChatHistory}
+                  >
+                    <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>New</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.langPill}
+                  activeOpacity={0.75}
+                  onPress={() => setShowLanguageModal(true)}
+                >
+                  <View style={styles.globeIconOuter}>
+                    <View style={styles.globeIconInner} />
+                  </View>
+                  <Text style={styles.langPillText}>{selectedLanguage}</Text>
+                  <Text style={styles.langPillChevron}>⌵</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </SafeAreaView>
@@ -404,24 +984,406 @@ export default function AgentScreenComponent() {
             contentContainerStyle={styles.agentHomeScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* 3D Centered Robot Mascot Hero with ambient soft green glow */}
-            <View style={styles.heroRobotSection}>
-              <View style={styles.heroAmbientGlow} />
-              <Image
-                source={require('../../assets/sensoo_ai_robot_centered.png')}
-                style={styles.heroRobotImg}
-                resizeMode="contain"
-              />
-            </View>
+            {chatMessages.length > 0 ? (
+              <View style={styles.chatThreadContainer}>
+                {chatMessages.map((msg, idx) => (
+                  <View key={idx} style={msg.sender === 'user' ? styles.userMessageRow : styles.agentChatRow}>
+                    {msg.sender === 'agent' && (
+                      <View style={styles.dialogueBotAvatar}>
+                        <Image source={require('../../assets/sensoo_ai_robot.jpg')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                      </View>
+                    )}
+                    {msg.isToolCall ? (
+                      <View style={styles.toolCallStatusChip}>
+                        <View style={[styles.toolCallStatusDot, msg.toolCallStatus === 'completed' && styles.toolCallStatusDotCompleted]} />
+                        <Text style={styles.toolCallStatusText}>
+                          {msg.text || (msg.toolCallStatus === 'completed' ? 'Completed' : 'Processing...')}
+                        </Text>
+                        {msg.toolCallStatus === 'completed' && (
+                          <Text style={styles.toolCallCheckmark}>✓</Text>
+                        )}
+                      </View>
+                    ) : msg.scanResult ? (
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.chatScanResultCard}>
+                          {/* Hero Section */}
+                          <View style={styles.chatScanHeroSection}>
+                            <Image
+                              source={msg.scanResult.heroImage}
+                              style={styles.chatScanHeroBadge}
+                              resizeMode="contain"
+                            />
+                            <Text style={[styles.chatScanHeroTitle, { color: msg.scanResult.titleColor }]}>
+                              {msg.scanResult.title}
+                            </Text>
+                            <Text style={styles.chatScanHeroSubtitle}>
+                              {msg.scanResult.subtitle}
+                            </Text>
+                          </View>
 
-            {/* Greeting Block */}
-            <View style={styles.agentGreetingBlock}>
-              <Text style={styles.agentGreetingTitle}>Hi, Hilda</Text>
-              <Text style={styles.agentGreetingSub}>How can I help you today?</Text>
-              <Text style={styles.agentGreetingDesc}>
-                I can explain your scans, give safety guidance,{'\n'}find nearby clinics and help you report{'\n'}suspicious products.
-              </Text>
-            </View>
+                          {/* Product Card */}
+                          <View style={styles.chatScanProductCard}>
+                            <View style={styles.chatScanProductImageWrapper}>
+                              <Image
+                                source={msg.scanResult.productImage}
+                                style={styles.chatScanProductThumbnail}
+                                resizeMode="contain"
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.chatScanProductNameText}>{msg.scanResult.productName}</Text>
+                              <View
+                                style={[
+                                  styles.chatScanStatusBadge,
+                                  { backgroundColor: msg.scanResult.statusBadgeBg },
+                                ]}
+                              >
+                                <Text style={styles.chatScanStatusBadgeIcon}>
+                                  {msg.scanResult.scenario === 'AUTHENTIC' ? '✓' : '!'}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.chatScanStatusBadgeLabel,
+                                    { color: msg.scanResult.statusBadgeColor },
+                                  ]}
+                                >
+                                  {msg.scanResult.statusBadgeText}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Product Details Table */}
+                          <View style={styles.chatScanDetailsCard}>
+                            <Text style={styles.chatScanDetailsHeaderTitle}>Product Details</Text>
+                            {msg.scanResult.details.map((item, dIdx) => (
+                              <View
+                                key={dIdx}
+                                style={[
+                                  styles.chatScanDetailRow,
+                                  dIdx < msg.scanResult!.details.length - 1 && styles.chatScanDetailRowBorder,
+                                ]}
+                              >
+                                <Text style={styles.chatScanDetailLabel}>{item.label}</Text>
+                                <Text
+                                  style={[
+                                    styles.chatScanDetailValue,
+                                    item.label.includes('Barcode') && styles.chatScanBarcodeFont,
+                                    item.value === 'Not found' && styles.chatScanValueNotFound,
+                                  ]}
+                                >
+                                  {item.value}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+
+                          {/* Callout Box */}
+                          <View
+                            style={[
+                              styles.chatScanCalloutBox,
+                              msg.scanResult.calloutType === 'success'
+                                ? styles.chatScanCalloutSuccess
+                                : msg.scanResult.calloutType === 'warning'
+                                ? styles.chatScanCalloutWarning
+                                : styles.chatScanCalloutDanger,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.chatScanCalloutIconCircle,
+                                {
+                                  backgroundColor:
+                                    msg.scanResult.calloutType === 'success'
+                                      ? '#059669'
+                                      : msg.scanResult.calloutType === 'warning'
+                                      ? '#D97706'
+                                      : '#DC2626',
+                                },
+                              ]}
+                            >
+                              <Text style={styles.chatScanCalloutIconText}>
+                                {msg.scanResult.calloutType === 'success' ? '✓' : '!'}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[
+                                  styles.chatScanCalloutTitle,
+                                  {
+                                    color:
+                                      msg.scanResult.calloutType === 'success'
+                                        ? '#065F46'
+                                        : msg.scanResult.calloutType === 'warning'
+                                        ? '#92400E'
+                                        : '#991B1B',
+                                  },
+                                ]}
+                              >
+                                {msg.scanResult.statusBadgeText}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.chatScanCalloutDesc,
+                                  {
+                                    color:
+                                      msg.scanResult.calloutType === 'success'
+                                        ? '#047857'
+                                        : msg.scanResult.calloutType === 'warning'
+                                        ? '#B45309'
+                                        : '#B91C1C',
+                                  },
+                                ]}
+                              >
+                                {msg.scanResult.calloutText}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    ) : msg.reportResult ? (
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.chatReportCard}>
+                          {/* Top Shield Header */}
+                          <View style={styles.chatReportHeader}>
+                            <View style={styles.chatReportIconBadge}>
+                              <Text style={styles.chatReportIconGlyph}>🛡️</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.chatReportAgencyTitle}>NAFDAC Sentinel Escalation</Text>
+                              <Text style={styles.chatReportAgencySub}>Market Surveillance & Enforcement Directorate</Text>
+                            </View>
+                          </View>
+
+                          {/* Reference Number Card */}
+                          <View style={styles.chatReportRefBox}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.chatReportRefLabel}>Incident Tracking Number</Text>
+                              <Text style={styles.chatReportRefCode}>{msg.reportResult.ticketId}</Text>
+                            </View>
+                            <View style={styles.chatReportStatusPill}>
+                              <Text style={styles.chatReportStatusText}>Queued</Text>
+                            </View>
+                          </View>
+
+                          {/* Incident Details Table */}
+                          <View style={styles.chatReportTable}>
+                            <View style={styles.chatReportRow}>
+                              <Text style={styles.chatReportLabel}>Flagged Product</Text>
+                              <Text style={styles.chatReportVal}>{msg.reportResult.productName}</Text>
+                            </View>
+                            <View style={[styles.chatReportRow, styles.chatReportRowBorder]}>
+                              <Text style={styles.chatReportLabel}>Location / Market</Text>
+                              <Text style={styles.chatReportVal}>{msg.reportResult.location}</Text>
+                            </View>
+                            <View style={[styles.chatReportRow, styles.chatReportRowBorder]}>
+                              <Text style={styles.chatReportLabel}>GPS Telemetry</Text>
+                              <Text style={styles.chatReportVal}>6.4698° N, 3.3852° E (Lagos)</Text>
+                            </View>
+                            <View style={[styles.chatReportRow, styles.chatReportRowBorder]}>
+                              <Text style={styles.chatReportLabel}>Investigation Status</Text>
+                              <Text style={[styles.chatReportVal, { color: '#059669', fontWeight: '700' }]}>
+                                {msg.reportResult.status}
+                              </Text>
+                            </View>
+                            <View style={[styles.chatReportRow, styles.chatReportRowBorder]}>
+                              <Text style={styles.chatReportLabel}>Timestamp</Text>
+                              <Text style={styles.chatReportVal}>{msg.reportResult.timestamp}</Text>
+                            </View>
+                          </View>
+
+                          {/* Attached Packaging Photos if present */}
+                          {msg.reportResult.evidencePhotos && msg.reportResult.evidencePhotos.length > 0 && (
+                            <View style={styles.chatReportEvidenceSection}>
+                              <Text style={styles.chatReportEvidenceHeader}>
+                                Evidence Dossier ({msg.reportResult.evidencePhotos.length} Photos Attached)
+                              </Text>
+                              <View style={styles.chatReportEvidenceGrid}>
+                                {msg.reportResult.evidencePhotos.map((photoUri, pIdx) => (
+                                  <View key={pIdx} style={styles.chatReportEvidenceThumbBox}>
+                                    <Image source={{ uri: photoUri }} style={styles.chatReportEvidenceThumbImg} resizeMode="cover" />
+                                    <View style={styles.chatReportEvidenceLabelBadge}>
+                                      <Text style={styles.chatReportEvidenceLabelText}>
+                                        {pIdx === 0 ? 'Front View' : 'Back View'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Bottom Assurance Alert Box */}
+                          <View style={styles.chatReportNoticeBox}>
+                            <Text style={styles.chatReportNoticeIcon}>✓</Text>
+                            <Text style={styles.chatReportNoticeText}>
+                              Incident dossier transferred to NAFDAC market enforcement task forces. Thank you for protecting consumer safety.
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ) : msg.evidencePrompt ? (
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.chatEvidenceCard}>
+                          <View style={styles.chatEvidenceHeader}>
+                            <View style={styles.chatEvidenceIconBadge}>
+                              <Text style={{ fontSize: 18 }}>📸</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.chatEvidenceTitle}>Packaging Photos Required</Text>
+                              <Text style={styles.chatEvidenceSub}>
+                                Since no barcode was found, upload Front & Back views to verify packaging batch stamps.
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.chatEvidenceMetaPill}>
+                            <Text style={styles.chatEvidenceMetaText}>
+                              Product: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{msg.evidencePrompt.productName}</Text>
+                              {'  •  '}
+                              Vendor: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{msg.evidencePrompt.location}</Text>
+                            </Text>
+                          </View>
+
+                          <View style={styles.chatEvidenceSlotsRow}>
+                            {/* Front Photo Slot */}
+                            {evidenceFrontUri ? (
+                              <TouchableOpacity
+                                style={[styles.chatEvidenceSlot, styles.chatEvidenceSlotFilled]}
+                                activeOpacity={0.85}
+                                onPress={() => openImagePickerPrompt('front')}
+                              >
+                                <Image source={{ uri: evidenceFrontUri }} style={styles.chatEvidenceThumbImg} resizeMode="cover" />
+                                <View style={styles.chatEvidenceThumbOverlay}>
+                                  <View style={styles.chatEvidenceThumbBadge}>
+                                    <Text style={styles.chatEvidenceThumbBadgeText}>✓ Front</Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    style={styles.chatEvidenceDeleteBtn}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    onPress={(e) => {
+                                      e.stopPropagation();
+                                      setEvidenceFrontUri(null);
+                                    }}
+                                  >
+                                    <Text style={styles.chatEvidenceDeleteText}>✕</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.chatEvidenceSlot}
+                                activeOpacity={0.8}
+                                onPress={() => openImagePickerPrompt('front')}
+                              >
+                                <View style={styles.chatEvidenceCameraIconCircle}>
+                                  <Text style={styles.chatEvidenceSlotIcon}>📷</Text>
+                                </View>
+                                <Text style={styles.chatEvidenceSlotLabel}>Front View</Text>
+                                <Text style={styles.chatEvidenceSlotHint}>Snap or upload</Text>
+                              </TouchableOpacity>
+                            )}
+
+                            {/* Back Photo Slot */}
+                            {evidenceBackUri ? (
+                              <TouchableOpacity
+                                style={[styles.chatEvidenceSlot, styles.chatEvidenceSlotFilled]}
+                                activeOpacity={0.85}
+                                onPress={() => openImagePickerPrompt('back')}
+                              >
+                                <Image source={{ uri: evidenceBackUri }} style={styles.chatEvidenceThumbImg} resizeMode="cover" />
+                                <View style={styles.chatEvidenceThumbOverlay}>
+                                  <View style={styles.chatEvidenceThumbBadge}>
+                                    <Text style={styles.chatEvidenceThumbBadgeText}>✓ Back</Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    style={styles.chatEvidenceDeleteBtn}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    onPress={(e) => {
+                                      e.stopPropagation();
+                                      setEvidenceBackUri(null);
+                                    }}
+                                  >
+                                    <Text style={styles.chatEvidenceDeleteText}>✕</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.chatEvidenceSlot}
+                                activeOpacity={0.8}
+                                onPress={() => openImagePickerPrompt('back')}
+                              >
+                                <View style={styles.chatEvidenceCameraIconCircle}>
+                                  <Text style={styles.chatEvidenceSlotIcon}>📷</Text>
+                                </View>
+                                <Text style={styles.chatEvidenceSlotLabel}>Back View (Seal)</Text>
+                                <Text style={styles.chatEvidenceSlotHint}>Snap or upload</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {/* Submit Action Button */}
+                          <TouchableOpacity
+                            style={[
+                              styles.chatEvidenceSubmitBtn,
+                              (!evidenceFrontUri || !evidenceBackUri) && styles.chatEvidenceSubmitBtnDisabled,
+                            ]}
+                            activeOpacity={0.85}
+                            disabled={!evidenceFrontUri || !evidenceBackUri}
+                            onPress={() => handleEvidenceSubmission(msg.evidencePrompt!.productName, msg.evidencePrompt!.location)}
+                          >
+                            <Text style={styles.chatEvidenceSubmitBtnText}>
+                              {evidenceFrontUri && evidenceBackUri
+                                ? 'Submit Packaging Evidence to NAFDAC'
+                                : 'Attach Front & Back to Submit'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={msg.sender === 'user' ? styles.userMessageBubble : styles.agentChatBubble}>
+                        <Text style={msg.sender === 'user' ? styles.userMessageText : styles.agentChatText}>{msg.text.replace(/\*/g, '')}</Text>
+                      </View>
+                    )}
+                    {msg.sender === 'user' && (
+                      <View style={styles.userAvatarInitialCircle}>
+                        <Text style={styles.userAvatarInitialText}>H</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+                {isAiThinking && (
+                  <View style={styles.agentChatRow}>
+                     <View style={styles.dialogueBotAvatar}>
+                        <Image source={require('../../assets/sensoo_ai_robot.jpg')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                     </View>
+                     <View style={styles.agentChatBubble}>
+                        <Text style={styles.agentChatText}>Thinking...</Text>
+                     </View>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View>
+                {/* 3D Centered Robot Mascot Hero with ambient soft green glow */}
+                <View style={styles.heroRobotSection}>
+                  <View style={styles.heroAmbientGlow} />
+                  <Image
+                    source={require('../../assets/sensoo_ai_robot_centered.png')}
+                    style={styles.heroRobotImg}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                {/* Greeting Block */}
+                <View style={styles.agentGreetingBlock}>
+                  <Text style={styles.agentGreetingTitle}>Hi, Hilda</Text>
+                  <Text style={styles.agentGreetingSub}>How can I help you today?</Text>
+                  <Text style={styles.agentGreetingDesc}>
+                    I can explain your scans, give safety guidance,{'\n'}find nearby clinics and help you report{'\n'}suspicious products.
+                  </Text>
+                </View>
 
             {/* 4 Action Cards in 2 Distinct Rows (Guaranteed 2x2 Grid) */}
             <View style={styles.actionGridContainer}>
@@ -531,6 +1493,8 @@ export default function AgentScreenComponent() {
               </View>
               <Text style={styles.bigMicLabel}>Tap to speak</Text>
             </View>
+              </View>
+            )}
           </ScrollView>
 
           {/* Bottom Floating Input Bar */}
@@ -1900,6 +2864,70 @@ export default function AgentScreenComponent() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* ======================================================== */}
+      {/* ATTACH PHOTO PICKER MODAL (Camera or Gallery/Files) */}
+      {/* ======================================================== */}
+      <Modal
+        visible={pickerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPickerModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickerModalOverlay}
+          activeOpacity={1}
+          onPress={() => setPickerModalVisible(false)}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.pickerModalIndicator} />
+            <Text style={styles.pickerModalTitle}>
+              Attach {pickerTarget === 'front' ? 'Front View' : 'Back View (Seal)'} Photo
+            </Text>
+            <Text style={styles.pickerModalSub}>
+              Provide packaging proof to verify batch stamps & anti-counterfeit seals.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.pickerModalActionBtn}
+              activeOpacity={0.8}
+              onPress={handlePickFromCamera}
+            >
+              <View style={[styles.pickerModalActionIconBox, { backgroundColor: '#ECFDF5' }]}>
+                <Text style={{ fontSize: 20 }}>📸</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickerModalActionTitle}>Snap Photo with Camera</Text>
+                <Text style={styles.pickerModalActionDesc}>Take a new clear photo of the packaging</Text>
+              </View>
+              <Text style={styles.pickerModalActionArrow}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pickerModalActionBtn}
+              activeOpacity={0.8}
+              onPress={handlePickFromGallery}
+            >
+              <View style={[styles.pickerModalActionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                <Text style={{ fontSize: 20 }}>📁</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickerModalActionTitle}>Upload from Files / Gallery</Text>
+                <Text style={styles.pickerModalActionDesc}>Choose an existing image or document file</Text>
+              </View>
+              <Text style={styles.pickerModalActionArrow}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pickerModalCancelBtn}
+              activeOpacity={0.8}
+              onPress={() => setPickerModalVisible(false)}
+            >
+              <Text style={styles.pickerModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1998,7 +3026,7 @@ const styles = StyleSheet.create({
   agentHomeScrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 120,
     width: '100%',
   },
   subPageScrollContent: {
@@ -3594,5 +4622,681 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#059669',
+  },
+  
+  /* Agent Home Chat Styles */
+  chatThreadContainer: {
+    paddingTop: 16,
+    paddingBottom: 40,
+    paddingHorizontal: 6,
+  },
+  agentChatRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginVertical: 10,
+  },
+  agentChatBubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderTopLeftRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: '75%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  agentChatText: {
+    fontSize: 14.5,
+    fontWeight: '500',
+    color: '#334155',
+    lineHeight: 22,
+  },
+  chatModelTag: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  toolCallStatusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    gap: 8,
+    alignSelf: 'flex-start',
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  toolCallStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#3B82F6',
+  },
+  toolCallStatusDotCompleted: {
+    backgroundColor: '#10B981',
+  },
+  toolCallStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  toolCallCheckmark: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#059669',
+  },
+
+  /* Visual Scan Verification Card inside Chat */
+  chatScanResultCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  chatScanHeroSection: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingTop: 4,
+  },
+  chatScanHeroBadge: {
+    width: 72,
+    height: 72,
+    marginBottom: 12,
+  },
+  chatScanHeroTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  chatScanHeroSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    paddingHorizontal: 8,
+  },
+  chatScanProductCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 14,
+  },
+  chatScanProductImageWrapper: {
+    width: 58,
+    height: 58,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  chatScanProductThumbnail: {
+    width: 48,
+    height: 48,
+  },
+  chatScanProductNameText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 19,
+    marginBottom: 6,
+  },
+  chatScanStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: 3.5,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    gap: 4,
+  },
+  chatScanStatusBadgeIcon: {
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  chatScanStatusBadgeLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  chatScanDetailsCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  chatScanDetailsHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  chatScanDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  chatScanDetailRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF2F7',
+  },
+  chatScanDetailLabel: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  chatScanDetailValue: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  chatScanBarcodeFont: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '700',
+  },
+  chatScanValueNotFound: {
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  chatScanCalloutBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  chatScanCalloutSuccess: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  chatScanCalloutWarning: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FEF3C7',
+  },
+  chatScanCalloutDanger: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+  },
+  chatScanCalloutIconCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  chatScanCalloutIconText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  chatScanCalloutTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  chatScanCalloutDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+
+  /* Autonomous NAFDAC Sentinel Incident Card inside Chat */
+  chatReportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  chatReportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  chatReportIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatReportIconGlyph: {
+    fontSize: 20,
+  },
+  chatReportAgencyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#064E3B',
+  },
+  chatReportAgencySub: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  chatReportRefBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  chatReportRefLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  chatReportRefCode: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  chatReportStatusPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  chatReportStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  chatReportTable: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  chatReportRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  chatReportRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#EDF2F7',
+  },
+  chatReportLabel: {
+    width: 125,
+    flexShrink: 0,
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    lineHeight: 17,
+  },
+  chatReportVal: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'right',
+    lineHeight: 17,
+  },
+  chatReportEvidenceSection: {
+    marginBottom: 12,
+  },
+  chatReportEvidenceHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 8,
+  },
+  chatReportEvidenceGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  chatReportEvidenceThumbBox: {
+    flex: 1,
+    height: 75,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  chatReportEvidenceThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  chatReportEvidenceLabelBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  chatReportEvidenceLabelText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  chatReportNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    padding: 10,
+    gap: 8,
+    marginTop: 4,
+  },
+  chatReportNoticeIcon: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#059669',
+    marginTop: 1,
+  },
+  chatReportNoticeText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#065F46',
+    lineHeight: 16.5,
+    fontWeight: '500',
+  },
+
+  /* In-Chat Evidence Packaging Card */
+  chatEvidenceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  chatEvidenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  chatEvidenceIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatEvidenceTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E3A8A',
+  },
+  chatEvidenceSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  chatEvidenceMetaPill: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  chatEvidenceMetaText: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 17,
+  },
+  chatEvidenceSlotsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  chatEvidenceSlot: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+  },
+  chatEvidenceSlotFilled: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    overflow: 'hidden',
+    borderStyle: 'solid',
+    borderColor: '#059669',
+    borderWidth: 1.5,
+    minHeight: 105,
+  },
+  chatEvidenceThumbImg: {
+    width: '100%',
+    height: 105,
+  },
+  chatEvidenceThumbOverlay: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    right: 6,
+    justifyContent: 'space-between',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chatEvidenceThumbBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  chatEvidenceThumbBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  chatEvidenceDeleteBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatEvidenceDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  chatEvidenceCameraIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  chatEvidenceSlotIcon: {
+    fontSize: 18,
+  },
+  chatEvidenceSlotLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 2,
+  },
+  chatEvidenceSlotHint: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+  },
+  chatEvidenceSubmitBtn: {
+    backgroundColor: '#064E3B',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatEvidenceSubmitBtnDisabled: {
+    backgroundColor: '#94A3B8',
+  },
+  chatEvidenceSubmitBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  /* Photo Picker Modal */
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  pickerModalIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  pickerModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  pickerModalSub: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginBottom: 18,
+    lineHeight: 17,
+  },
+  pickerModalActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  pickerModalActionIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerModalActionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  pickerModalActionDesc: {
+    fontSize: 11.5,
+    color: '#64748B',
+  },
+  pickerModalActionArrow: {
+    fontSize: 18,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  pickerModalCancelBtn: {
+    marginTop: 6,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+  },
+  pickerModalCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
   },
 });

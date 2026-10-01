@@ -16,6 +16,13 @@ export interface SensooAiResponse {
   modelUsed: string;
   languageUsed?: string;
   intent?: 'VERIFY' | 'MEDICAL_SAFETY' | 'REPORT' | 'GENERAL';
+  action?: 'SCAN' | 'REPORT' | 'NONE';
+  reportArgs?: {
+    productName?: string;
+    location?: string;
+    details?: string;
+    barcode?: string;
+  };
   symptomsDetected?: string[];
   recommendedAction?: string;
   error?: string;
@@ -39,7 +46,10 @@ Your responsibilities:
 2. If the user selects or speaks in Nigerian Pidgin, Yorùbá, Hausa, or Igbo, reply authentically and fluently in that exact Nigerian language using N-ATLaS linguistic idioms.
 3. If counterfeit medicine or cosmetics are ingested/applied, prioritize clinical safety and urge immediate evaluation at accredited clinics (LUTH Surulere, Reddington Hospital, Ikeja General, or emergency 112).
 4. If suspicious distribution is reported, confirm that an incident dossier is being dispatched to NAFDAC Sentinel threat clusters.
-5. Keep answers concise, highly readable on mobile screens, and actionable.`;
+5. Keep answers concise, highly readable on mobile screens, and actionable.
+6. DO NOT use markdown formatting (like **bold** or *italics* asterisks). Output plain conversational text only.
+7. CRITICAL: If the user asks to scan, check, or verify a physical product, you MUST call the 'trigger_camera_scan' function. Do NOT reply with instructions on how to scan or hallucinate UI buttons. Use the function call.
+8. CRITICAL: If the user asks to report a counterfeit, fake product, or suspicious seller/location, you MUST call the 'submit_fraud_report' function. Do NOT give verbal excuses.`;
 
 /**
  * Call Sensoo Agentic AI with Dual-Brain Orchestration:
@@ -94,7 +104,9 @@ export async function sendAgentMessage(
     const res = await callGeminiModel(PRIMARY_MODEL, contents);
     return {
       success: true,
-      reply: res,
+      reply: res.reply,
+      action: res.action as 'SCAN' | 'REPORT' | 'NONE',
+      reportArgs: res.reportArgs,
       modelUsed: modelTag,
       languageUsed: targetLang,
     };
@@ -106,7 +118,9 @@ export async function sendAgentMessage(
       const fallbackRes = await callGeminiModel(FALLBACK_MODEL, contents);
       return {
         success: true,
-        reply: fallbackRes,
+        reply: fallbackRes.reply,
+        action: fallbackRes.action as 'SCAN' | 'REPORT' | 'NONE',
+        reportArgs: fallbackRes.reportArgs,
         modelUsed: isNigerianVernacular ? `${SOVEREIGN_NATLAS_MODEL} + ${FALLBACK_MODEL}` : FALLBACK_MODEL,
         languageUsed: targetLang,
       };
@@ -122,7 +136,10 @@ export async function sendAgentMessage(
 /**
  * Internal helper to send payload to Gemini REST endpoint
  */
-async function callGeminiModel(modelName: string, contents: any[]): Promise<string> {
+async function callGeminiModel(
+  modelName: string,
+  contents: any[]
+): Promise<{ reply: string; action?: string; reportArgs?: { productName?: string; location?: string; details?: string; barcode?: string } }> {
   if (!GEMINI_API_KEY) {
     throw new Error('No API key configured');
   }
@@ -139,6 +156,38 @@ async function callGeminiModel(modelName: string, contents: any[]): Promise<stri
       systemInstruction: {
         parts: [{ text: SYSTEM_INSTRUCTION }],
       },
+      tools: [
+        {
+          functionDeclarations: [
+            {
+              name: 'trigger_camera_scan',
+              description: 'Opens the barcode scanner hardware. Call this when the user asks to check, scan, or verify a physical product they are holding.'
+            },
+            {
+              name: 'submit_fraud_report',
+              description: 'Submits an official counterfeit fraud incident report to NAFDAC Sentinel surveillance. Call this when the user asks to report a fake, counterfeit, cloned product or a suspicious vendor/location.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  productName: {
+                    type: 'STRING',
+                    description: 'The name of the flagged product being reported.'
+                  },
+                  location: {
+                    type: 'STRING',
+                    description: 'Market, store, street, or city where the item was seen or bought (e.g. Idumota Market, Lagos).'
+                  },
+                  details: {
+                    type: 'STRING',
+                    description: 'Brief description of the complaint or reason for reporting.'
+                  }
+                },
+                required: ['productName']
+              }
+            }
+          ]
+        }
+      ],
       generationConfig: {
         temperature: 0.35,
         maxOutputTokens: 600,
@@ -152,11 +201,32 @@ async function callGeminiModel(modelName: string, contents: any[]): Promise<stri
   }
 
   const data = await response.json();
-  const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!candidate) {
+  const candidatePart = data.candidates?.[0]?.content?.parts?.[0];
+  
+  if (!candidatePart) {
     throw new Error('Empty response from model');
   }
-  return candidate.trim();
+
+  // Handle function calling / agentic tool use
+  if (candidatePart.functionCall) {
+    if (candidatePart.functionCall.name === 'trigger_camera_scan') {
+      return { reply: "Opening the scanner for you now...", action: 'SCAN' };
+    }
+    if (candidatePart.functionCall.name === 'submit_fraud_report') {
+      const args = candidatePart.functionCall.args || {};
+      return {
+        reply: `Filing official counterfeit incident report for ${args.productName || 'flagged product'} to NAFDAC Sentinel...`,
+        action: 'REPORT',
+        reportArgs: {
+          productName: args.productName,
+          location: args.location,
+          details: args.details,
+        }
+      };
+    }
+  }
+
+  return { reply: candidatePart.text?.trim() || '', action: 'NONE' };
 }
 
 /**

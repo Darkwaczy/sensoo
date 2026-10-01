@@ -13,7 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -21,6 +21,7 @@ const RETICLE_SIZE = Math.min(SCREEN_WIDTH * 0.72, 270);
 
 export default function ScannerScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ origin?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [torchOn, setTorchOn] = useState(false);
   const [scanMode, setScanMode] = useState<'barcode' | 'qr'>('barcode');
@@ -75,7 +76,7 @@ export default function ScannerScreen() {
     setIsScanning(false);
     router.push({
       pathname: '/checking',
-      params: { code: codeToVerify },
+      params: { code: codeToVerify, origin: params.origin },
     });
   };
 
