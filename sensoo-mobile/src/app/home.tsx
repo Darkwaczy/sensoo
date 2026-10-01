@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -411,65 +411,91 @@ export default function HomeScreen() {
     return unsub;
   }, []);
 
-  const activateVoiceAssistant = () => {
-    setShowVoiceListenerModal(true);
-    setVoiceNotice('🎙️ Listening...');
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const voicePulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    let pulseLoop: Animated.CompositeAnimation | null = null;
+    if (isVoiceListening) {
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(voicePulseAnim, {
+            toValue: 1.25,
+            duration: 550,
+            useNativeDriver: true,
+          }),
+          Animated.timing(voicePulseAnim, {
+            toValue: 1.0,
+            duration: 550,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoop.start();
+    } else {
+      voicePulseAnim.setValue(1);
+    }
+    return () => {
+      if (pulseLoop) pulseLoop.stop();
+    };
+  }, [isVoiceListening]);
+
+  const toggleVoiceAssistant = () => {
+    if (isVoiceListening) {
+      setIsVoiceListening(false);
+      try {
+        Speech.stop();
+      } catch {}
+      return;
+    }
+
+    setIsVoiceListening(true);
     try {
       Speech.stop();
-      Speech.speak('Yes Kingsley, what can I do for you right now?', {
+      Speech.speak('Listening...', {
         language: 'en-US',
         pitch: 1.05,
-        rate: 0.95,
+        rate: 1.0,
       });
     } catch (e) {
       console.warn('Speech error:', e);
     }
   };
 
-  const handleVoiceCommand = (rawSpeech: string) => {
-    const cmd = rawSpeech.trim();
-    if (!cmd) return;
+  const handleVoiceCommand = (cmd: string) => {
+    setIsVoiceListening(false);
     const parsed = parseVoiceCommand(cmd);
-
-    setVoiceNotice(`⚡ ${parsed.actionSummary || 'Executing...'}`);
-    setTimeout(() => setVoiceNotice(null), 3500);
 
     if (parsed.intent === 'SCAN') {
       try {
         Speech.stop();
-        Speech.speak('Opening camera scanner right away.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+        Speech.speak('Opening camera scanner.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
       } catch {}
-      setTimeout(() => router.push('/scanner'), 600);
+      setTimeout(() => router.push('/scanner'), 400);
     } else if (parsed.intent === 'CLINIC') {
       try {
         Speech.stop();
-        Speech.speak('Finding accredited clinics near you.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+        Speech.speak('Finding accredited clinics.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
       } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } }), 600);
+      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } }), 400);
     } else if (parsed.intent === 'REPORT') {
       try {
         Speech.stop();
-        Speech.speak('Opening NAFDAC counterfeit report intake.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+        Speech.speak('Opening NAFDAC report intake.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
       } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } }), 600);
+      setTimeout(() => router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } }), 400);
     } else if (parsed.intent === 'HISTORY') {
       try {
         Speech.stop();
-        Speech.speak('Opening your previous scan history.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+        Speech.speak('Opening scan history.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
       } catch {}
       setActiveView('RecentScans');
-    } else if (parsed.intent === 'GUIDANCE') {
-      try {
-        Speech.stop();
-        Speech.speak('Opening AI safety guidance.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
-      } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'safety_guidance' } }), 600);
     } else {
       try {
         Speech.stop();
-        Speech.speak('Checking that with Sensoo AI.', { language: 'en-US', pitch: 1.05, rate: 0.95 });
+        Speech.speak('Opening AI guidance.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
       } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { query: cmd } }), 600);
+      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'safety_guidance' } }), 400);
     }
   };
 
@@ -1658,19 +1684,76 @@ export default function HomeScreen() {
       {/* FLOATING QUICK VOICE COMMANDER BUTTON */}
       {/* ======================================================== */}
       {voiceSettings.enabled && (
-        <TouchableOpacity
-          style={styles.heartPumpFloatingBtn}
-          activeOpacity={0.85}
-          onPress={activateVoiceAssistant}
-        >
-          <View style={styles.heartPumpInnerCircle}>
-            <Text style={{ fontSize: 20 }}>🎙️</Text>
-          </View>
-          <View style={styles.heartPumpBadgePill}>
-            <View style={styles.heartPumpLiveDot} />
-            <Text style={styles.heartPumpBadgeText}>Hey Sensoo</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.floatingVoiceContainer} pointerEvents="box-none">
+          {/* Direct Quick Actions when Listening */}
+          {isVoiceListening && (
+            <View style={styles.voiceQuickActionsRow}>
+              <TouchableOpacity
+                style={styles.voiceQuickPill}
+                activeOpacity={0.8}
+                onPress={() => handleVoiceCommand('scan')}
+              >
+                <Text style={styles.voiceQuickPillText}>📷 Scan</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.voiceQuickPill}
+                activeOpacity={0.8}
+                onPress={() => handleVoiceCommand('clinic')}
+              >
+                <Text style={styles.voiceQuickPillText}>🏥 Clinic</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.voiceQuickPill}
+                activeOpacity={0.8}
+                onPress={() => handleVoiceCommand('report')}
+              >
+                <Text style={styles.voiceQuickPillText}>🛡️ Report</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.heartPumpFloatingBtn,
+              isVoiceListening && styles.heartPumpFloatingBtnListening,
+            ]}
+            activeOpacity={0.85}
+            onPress={toggleVoiceAssistant}
+          >
+            <Animated.View
+              style={[
+                styles.heartPumpInnerCircle,
+                isVoiceListening && {
+                  transform: [{ scale: voicePulseAnim }],
+                  backgroundColor: '#059669',
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 20 }}>🎙️</Text>
+            </Animated.View>
+            <View
+              style={[
+                styles.heartPumpBadgePill,
+                isVoiceListening && { backgroundColor: '#064E3B', borderColor: '#10B981' },
+              ]}
+            >
+              <View
+                style={[
+                  styles.heartPumpLiveDot,
+                  isVoiceListening && { backgroundColor: '#34D399' },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.heartPumpBadgeText,
+                  isVoiceListening && { color: '#A7F3D0', fontWeight: '800' },
+                ]}
+              >
+                {isVoiceListening ? 'Listening...' : 'Hey Sensoo'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* ======================================================== */}
@@ -1833,77 +1916,7 @@ export default function HomeScreen() {
         </View>
       </SafeAreaView>
 
-      {/* ======================================================== */}
-      {/* 7. HEART-PUMP "HEY SENSOO" INTERACTIVE LISTENER MODAL */}
-      {/* ======================================================== */}
-      <Modal
-        visible={showVoiceListenerModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowVoiceListenerModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.heartPumpModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowVoiceListenerModal(false)}
-        >
-          <View style={styles.heartPumpModalCard}>
-            <TouchableOpacity
-              style={styles.heartPumpModalClose}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              onPress={() => setShowVoiceListenerModal(false)}
-            >
-              <Text style={{ fontSize: 18, color: '#94A3B8', fontWeight: '700' }}>✕</Text>
-            </TouchableOpacity>
 
-            {/* Voice Commander Header Visual */}
-            <View style={styles.heartPumpVisualContainer}>
-              <View style={styles.heartPumpCoreCircle}>
-                <Text style={{ fontSize: 34 }}>🎙️</Text>
-              </View>
-            </View>
-
-            <Text style={styles.heartPumpModalTitle}>Hey Sensoo!</Text>
-            <Text style={styles.heartPumpModalSubtitle}>
-              "Yes Kingsley, what can I do for you right now?"
-            </Text>
-
-            {/* Direct Speech / Text Command Input */}
-            <View style={styles.heartPumpInputRow}>
-              <TextInput
-                style={styles.heartPumpInput}
-                placeholder="Say or type command (e.g. Open scanner)..."
-                placeholderTextColor="#94A3B8"
-                autoFocus
-                value={voiceListenerSpokenText}
-                onChangeText={setVoiceListenerSpokenText}
-                onSubmitEditing={() => {
-                  if (voiceListenerSpokenText.trim()) {
-                    const cmd = voiceListenerSpokenText.trim();
-                    setVoiceListenerSpokenText('');
-                    setShowVoiceListenerModal(false);
-                    handleVoiceCommand(cmd);
-                  }
-                }}
-              />
-              <TouchableOpacity
-                style={styles.heartPumpInputSendBtn}
-                activeOpacity={0.8}
-                onPress={() => {
-                  if (voiceListenerSpokenText.trim()) {
-                    const cmd = voiceListenerSpokenText.trim();
-                    setVoiceListenerSpokenText('');
-                    setShowVoiceListenerModal(false);
-                    handleVoiceCommand(cmd);
-                  }
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>➤</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* ======================================================== */}
       {/* 8. ASK SENSOO AGENTIC AI INTERACTIVE MODAL */}
@@ -3471,16 +3484,50 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* Floating Heart-Pump Siri Button */
-  heartPumpFloatingBtn: {
+  /* Floating Heart-Pump Siri Button (Direct Listening) */
+  floatingVoiceContainer: {
     position: 'absolute',
     bottom: 86,
     right: 18,
+    alignItems: 'flex-end',
+    zIndex: 998,
+  },
+  voiceQuickActionsRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginBottom: 10,
+  },
+  voiceQuickPill: {
+    backgroundColor: '#064E3B',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: '#34D399',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  voiceQuickPillText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  heartPumpFloatingBtn: {
     width: 62,
     height: 62,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 998,
+  },
+  heartPumpFloatingBtnListening: {
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 14,
+    elevation: 10,
   },
   heartPumpPulseRing: {
     position: 'absolute',
