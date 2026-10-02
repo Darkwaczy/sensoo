@@ -7,7 +7,7 @@ All business logic lives in sensoo_core; this file is only HTTP + docs.
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel, Field
 
 from msflib import get_engine
@@ -16,7 +16,7 @@ from sensoo_core import seed_demo_data, verify_scan
 app = FastAPI(
     title="Sensoo Verification API",
     description="Anti-counterfeit scan engine for the KodeHauz@10 Hackathon",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 seed_demo_data()
@@ -49,6 +49,22 @@ class ScanResponse(BaseModel):
     batch_id: Optional[str]
 
 
+class RegisterRequest(BaseModel):
+    """Register a new product code (manufacturer action)."""
+    code: str = Field(..., description="Unique product verification code")
+    product_name: str = Field(..., description="Name of the product")
+    manufacturer: str = Field(..., description="Manufacturer name")
+    batch_id: str = Field(..., description="Batch identifier")
+    region: str = Field("NG", description="Original shipping region")
+
+
+class RegisterResponse(BaseModel):
+    """Response after registering a product."""
+    success: bool
+    message: str
+    code: str
+
+
 class FeedItem(BaseModel):
     """One row in the dashboard feed."""
     code: str
@@ -73,6 +89,33 @@ def scan_product(body: ScanRequest) -> ScanResponse:
         device_id=body.device_id,
     )
     return ScanResponse(**result)
+
+
+@app.post("/register", response_model=RegisterResponse)
+def register_product(body: RegisterRequest) -> RegisterResponse:
+    """Register a new product code so it can be scanned later."""
+    engine = get_engine()
+    code = body.code.strip().upper()
+
+    if engine.get_code(code):
+        raise HTTPException(status_code=400, detail=f"Code {code} is already registered")
+
+    success = engine.register_code(
+        code=code,
+        region=body.region.strip().upper(),
+        batch_id=body.batch_id.strip(),
+        product_name=body.product_name.strip(),
+        manufacturer=body.manufacturer.strip(),
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to register product")
+
+    return RegisterResponse(
+        success=True,
+        message=f"Product {code} registered successfully",
+        code=code,
+    )
 
 
 @app.get("/feed", response_model=List[FeedItem])
