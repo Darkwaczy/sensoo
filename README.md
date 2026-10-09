@@ -186,8 +186,8 @@ uvicorn main:app --reload --port 8000
 
 Interactive API docs will be available at `http://localhost:8000/docs`.
 
-**Live Deployment:** https://sensoo-api.onrender.com  
-**Swagger Docs:** https://sensoo-api.onrender.com/docs
+**Live Deployment:** https://sensoo-app-final-2.onrender.com  
+**Swagger Docs:** https://sensoo-app-final-2.onrender.com/docs
 
 ### 2. Consumer Mobile App (Frontend)
 
@@ -213,14 +213,14 @@ Create `sensoo-mobile/.env` (never commit this file):
 ```env
 EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
 EXPO_PUBLIC_HF_NATLAS_MODEL=NCAIR1/N-ATLaS
-EXPO_PUBLIC_SENSOO_API_URL=https://sensoo-api.onrender.com
+EXPO_PUBLIC_API_URL=https://sensoo-app-final-2.onrender.com/api/v1
 ```
 
 ---
 
 ## API Contract
 
-**Base URL:** `https://sensoo-api.onrender.com`
+**Base URL:** `https://sensoo-app-final-2.onrender.com`
 
 ### 1. Scan Product
 
