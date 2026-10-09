@@ -491,54 +491,17 @@ export default function AgentScreenComponent() {
     }
   }, [params.origin, params.scenario, params.scanCode, params.productName]);
 
-  // High-Definition, Smooth Text-To-Speech Synthesis
-  const speakTextAloud = (text: string, _langName = selectedLanguage) => {
+  // Text-To-Speech Synthesis (Disabled by default as requested: text-only responses)
+  const speakTextAloud = (_text: string, _langName = selectedLanguage) => {
+    // Intentionally silent: text displayed on screen without reading out loud
     try {
-      // 1. Immediately cancel any ongoing speech to flush audio channel
       Speech.stop();
       if (speechTimerRef.current) {
         clearTimeout(speechTimerRef.current);
       }
-
-      // 2. Thoroughly clean text of emojis, markdown, and bracketed tags that cause stuttering
-      const cleanText = text
-        .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
-        .replace(/[\u2600-\u27BF]/g, '')
-        .replace(/[\uFE00-\uFE0F]/g, '')
-        .replace(/[*#_`>~]/g, '')
-        .replace(/\[.*?\]/g, '')
-        .replace(/\bNAFDAC\b/gi, 'Nafdac')
-        .replace(/\bSensoo\b/gi, 'Sen-soo')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (!cleanText) return;
-
-      // 3. 150ms debounce: completely flush audio hardware buffer to prevent dual-stream comb filtering
-      speechTimerRef.current = setTimeout(() => {
-        setIsSpeakingAudio(true);
-        Speech.speak(cleanText, {
-          language: 'en-GB', // British English - most devices have a high-quality neural voice for en-GB
-          pitch: 1.0,        // Natural pitch
-          rate: 0.95,        // Slightly slower = clearer enunciation, no grain stretching
-          onDone: () => setIsSpeakingAudio(false),
-          onStopped: () => setIsSpeakingAudio(false),
-          onError: () => {
-            // Fallback: try en-US if en-GB unavailable
-            Speech.speak(cleanText, {
-              language: 'en-US',
-              pitch: 1.0,
-              rate: 0.95,
-              onDone: () => setIsSpeakingAudio(false),
-              onStopped: () => setIsSpeakingAudio(false),
-              onError: () => setIsSpeakingAudio(false),
-            });
-          },
-        });
-      }, 150);
-    } catch (err) {
-      console.warn('Speech synthesis error:', err);
       setIsSpeakingAudio(false);
+    } catch {
+      // ignore
     }
   };
 
@@ -1484,7 +1447,7 @@ export default function AgentScreenComponent() {
 
                 {/* Greeting Block */}
                 <View style={styles.agentGreetingBlock}>
-                  <Text style={styles.agentGreetingTitle}>Hi, Hilda</Text>
+                  <Text style={styles.agentGreetingTitle}>Hi, Ings</Text>
                   <Text style={styles.agentGreetingSub}>How can I help you today?</Text>
                   <Text style={styles.agentGreetingDesc}>
                     I can explain your scans, give safety guidance,{'\n'}find nearby clinics and help you report{'\n'}suspicious products.

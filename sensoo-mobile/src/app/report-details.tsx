@@ -29,6 +29,7 @@ export default function ReportDetailsScreen() {
   const reportedDate = params.date || 'Aug 20, 2025, 10:42 AM';
 
   const isUnderReview = reportStatus === 'Under Review';
+  const isReviewed = reportStatus === 'Reviewed';
   const isActionTaken = reportStatus === 'Action Taken';
   const isClosed = reportStatus === 'Closed';
 
@@ -91,6 +92,7 @@ export default function ReportDetailsScreen() {
                 style={[
                   styles.statusPill,
                   isUnderReview && styles.statusPillUnderReview,
+                  isReviewed && styles.statusPillReviewed,
                   isActionTaken && styles.statusPillActionTaken,
                   isClosed && styles.statusPillClosed,
                 ]}
@@ -99,6 +101,7 @@ export default function ReportDetailsScreen() {
                   style={[
                     styles.statusPillText,
                     isUnderReview && styles.statusTextUnderReview,
+                    isReviewed && styles.statusTextReviewed,
                     isActionTaken && styles.statusTextActionTaken,
                     isClosed && styles.statusTextClosed,
                   ]}
@@ -177,7 +180,7 @@ export default function ReportDetailsScreen() {
         <View style={styles.timelineSectionCard}>
           <Text style={styles.sectionHeaderTitle}>Status</Text>
 
-          {/* Step 1: Report Submitted (Done) */}
+          {/* Step 1: Report Submitted (Always Done) */}
           <View style={styles.timelineStep}>
             <View style={styles.stepIndicatorColumn}>
               <View style={[styles.stepDot, styles.stepDotDone]}>
@@ -191,29 +194,71 @@ export default function ReportDetailsScreen() {
             </View>
           </View>
 
-          {/* Step 2: Under Review (Active) */}
+          {/* Step 2: Under Review */}
           <View style={styles.timelineStep}>
             <View style={styles.stepIndicatorColumn}>
-              <View style={[styles.stepDot, styles.stepDotActive]}>
-                <View style={styles.stepDotInnerSolid} />
-              </View>
-              <View style={styles.stepLine} />
+              {isUnderReview ? (
+                <View style={[styles.stepDot, styles.stepDotActive]}>
+                  <View style={styles.stepDotInnerSolid} />
+                </View>
+              ) : (
+                <View style={[styles.stepDot, styles.stepDotDone]}>
+                  <Text style={styles.stepDotCheck}>✓</Text>
+                </View>
+              )}
+              <View
+                style={[
+                  styles.stepLine,
+                  (isReviewed || isActionTaken || isClosed) && styles.stepLineDone,
+                ]}
+              />
             </View>
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Under review</Text>
-              <Text style={styles.stepSubtitle}>Our team is reviewing your report.</Text>
+              <Text style={styles.stepSubtitle}>
+                {isUnderReview
+                  ? 'Our team is actively reviewing your report.'
+                  : 'Investigation completed by regulatory team.'}
+              </Text>
             </View>
           </View>
 
           {/* Step 3: Review Complete */}
           <View style={styles.timelineStep}>
             <View style={styles.stepIndicatorColumn}>
-              <View style={styles.stepDot} />
-              <View style={styles.stepLine} />
+              {isReviewed ? (
+                <View style={[styles.stepDot, styles.stepDotActive]}>
+                  <View style={styles.stepDotInnerSolid} />
+                </View>
+              ) : isActionTaken || isClosed ? (
+                <View style={[styles.stepDot, styles.stepDotDone]}>
+                  <Text style={styles.stepDotCheck}>✓</Text>
+                </View>
+              ) : (
+                <View style={styles.stepDot} />
+              )}
+              <View
+                style={[
+                  styles.stepLine,
+                  (isActionTaken || isClosed) && styles.stepLineDone,
+                ]}
+              />
             </View>
             <View style={styles.stepContent}>
-              <Text style={[styles.stepTitle, styles.stepTitlePending]}>
+              <Text
+                style={[
+                  styles.stepTitle,
+                  isUnderReview && styles.stepTitlePending,
+                ]}
+              >
                 Review complete
+              </Text>
+              <Text style={styles.stepSubtitle}>
+                {isReviewed
+                  ? 'Counterfeit verification confirmed. Escalated to enforcement.'
+                  : isActionTaken || isClosed
+                  ? 'Batch verified as non-compliant.'
+                  : 'Pending regulatory triage.'}
               </Text>
             </View>
           </View>
@@ -221,11 +266,29 @@ export default function ReportDetailsScreen() {
           {/* Step 4: Action Taken */}
           <View style={styles.timelineStep}>
             <View style={styles.stepIndicatorColumn}>
-              <View style={styles.stepDot} />
+              {isActionTaken || isClosed ? (
+                <View style={[styles.stepDot, styles.stepDotDone]}>
+                  <Text style={styles.stepDotCheck}>✓</Text>
+                </View>
+              ) : (
+                <View style={styles.stepDot} />
+              )}
             </View>
             <View style={styles.stepContent}>
-              <Text style={[styles.stepTitle, styles.stepTitlePending]}>
+              <Text
+                style={[
+                  styles.stepTitle,
+                  !isActionTaken && !isClosed && styles.stepTitlePending,
+                ]}
+              >
                 Action taken
+              </Text>
+              <Text style={styles.stepSubtitle}>
+                {isActionTaken
+                  ? 'NAFDAC enforcement alert issued & merchant flagged.'
+                  : isClosed
+                  ? 'Case closed and catalogued in national fraud registry.'
+                  : 'Enforcement measures pending review outcome.'}
               </Text>
             </View>
           </View>
@@ -357,6 +420,9 @@ const styles = StyleSheet.create({
   statusPillUnderReview: {
     backgroundColor: '#FEE2E2',
   },
+  statusPillReviewed: {
+    backgroundColor: '#DCFCE7',
+  },
   statusPillActionTaken: {
     backgroundColor: '#DBEAFE',
   },
@@ -369,6 +435,9 @@ const styles = StyleSheet.create({
   },
   statusTextUnderReview: {
     color: '#DC2626',
+  },
+  statusTextReviewed: {
+    color: '#059669',
   },
   statusTextActionTaken: {
     color: '#2563EB',

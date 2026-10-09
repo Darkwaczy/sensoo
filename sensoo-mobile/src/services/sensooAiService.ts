@@ -113,6 +113,14 @@ export async function sendAgentMessage(
   } catch (primaryErr: any) {
     console.warn(`[Sensoo AI] Primary model (${PRIMARY_MODEL}) failed, trying fallback (${FALLBACK_MODEL}):`, primaryErr?.message);
 
+    // Try MSFLib FastAPI Backend AI Endpoint first if server available
+    try {
+      const backendAiRes = await callMsfLibBackendAi(userQuery, contextData);
+      if (backendAiRes) {
+        return backendAiRes;
+      }
+    } catch (_ignored) {}
+
     // 2. Try Fallback Model (gemini-2.5-flash-lite)
     try {
       const fallbackRes = await callGeminiModel(FALLBACK_MODEL, contents);
@@ -131,6 +139,42 @@ export async function sendAgentMessage(
       return generateLocalizedSmartReply(userQuery, targetLang, contextData);
     }
   }
+}
+
+/**
+ * Call MSFLib AI API Backend (/api/v1/ai/ask)
+ */
+async function callMsfLibBackendAi(
+  userQuery: string,
+  contextData?: { scannedCode?: string; productName?: string; scenario?: string }
+): Promise<SensooAiResponse | null> {
+  try {
+    const response = await fetch('http://localhost:8000/api/v1/ai/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: userQuery,
+        scanned_code: contextData?.scannedCode,
+        product_name: contextData?.productName,
+        status: contextData?.scenario,
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.answer) {
+        return {
+          success: true,
+          reply: data.answer,
+          modelUsed: `${data.model_used} (${data.protocol})`,
+          intent: 'MEDICAL_SAFETY',
+        };
+      }
+    }
+  } catch (e) {
+    // Backend offline, fallback seamlessly to client AI
+  }
+  return null;
 }
 
 /**
