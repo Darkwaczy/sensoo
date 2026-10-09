@@ -62,21 +62,21 @@ export async function verifyScanOnline(
     device_id: DEFAULT_DEVICE_ID,
   };
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout to handle Render cold-starts
+  const fetchPromise = fetch(`${SENSOO_API_BASE_URL}/scan`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Network request timed out (15s)')), 15000)
+  );
 
   try {
-    const response = await fetch(`${SENSOO_API_BASE_URL}/scan`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
+    const response = (await Promise.race([fetchPromise, timeoutPromise])) as Response;
 
     if (!response.ok) {
       throw new Error(`API returned status ${response.status}`);
@@ -85,8 +85,7 @@ export async function verifyScanOnline(
     const data: ScanApiResponse = await response.json();
     return data;
   } catch (error) {
-    clearTimeout(timeoutId);
-    console.warn('Sensoo API request notice (switching to resilient fallback if server cold-starting):', error);
+    console.warn('Sensoo API notice (using resilient fallback if server is waking up):', error);
     throw error;
   }
 }
