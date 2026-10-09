@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.actions import VerificationAction
+from app.ai_router import ai_router
 from app.db import get_session
 from app.models import (
     FeedItemResponse,
@@ -15,7 +16,9 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["sensoo"])
+router.include_router(ai_router)
 verification_action = VerificationAction()
+
 
 
 @router.post("/scan", response_model=ScanResponse)
