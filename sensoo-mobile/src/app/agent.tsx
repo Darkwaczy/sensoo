@@ -752,6 +752,62 @@ export default function AgentScreenComponent() {
     setIsAiThinking(true);
     
     // ---------------------------------------------------------
+    // INTENT INTERCEPTION (Scan / Camera / Cancel Intents)
+    // ---------------------------------------------------------
+    const lowerQ = query.toLowerCase();
+    const isScanIntent =
+      lowerQ.includes('scan') ||
+      lowerQ.includes('camera') ||
+      lowerQ.includes('verify') ||
+      lowerQ.includes('check barcode') ||
+      lowerQ.includes('barcode') ||
+      lowerQ.includes('open scanner') ||
+      lowerQ.includes('scan first') ||
+      lowerQ.includes('scan it') ||
+      lowerQ.includes('let us scan') ||
+      lowerQ.includes('want to scan');
+
+    if (isScanIntent) {
+      setInvestigation({ step: 'idle', productName: '', location: '', barcodeOrBatch: '' });
+      const reply = 'Opening camera scanner for real-time barcode telemetry...';
+      appendChatMessage({
+        sender: 'agent',
+        text: reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'Sensoo Agentic AI',
+        isToolCall: true,
+        toolCallStatus: 'in_progress',
+      });
+      speakTextAloud('Opening camera scanner for you now.', selectedLanguage);
+      setTimeout(() => {
+        router.push({ pathname: '/scanner', params: { origin: 'chat' } });
+      }, 400);
+      setIsAiThinking(false);
+      return;
+    }
+
+    const isCancelIntent =
+      lowerQ === 'cancel' ||
+      lowerQ.includes('cancel report') ||
+      lowerQ.includes('nevermind') ||
+      lowerQ.includes('stop report') ||
+      lowerQ.includes('dont report');
+
+    if (isCancelIntent) {
+      setInvestigation({ step: 'idle', productName: '', location: '', barcodeOrBatch: '' });
+      const reply = 'Understood. The report process has been cancelled. How else can I assist you?';
+      appendChatMessage({
+        sender: 'agent',
+        text: reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'Sensoo Agentic AI',
+      });
+      speakTextAloud(reply, selectedLanguage);
+      setIsAiThinking(false);
+      return;
+    }
+
+    // ---------------------------------------------------------
     // MULTI-TURN INVESTIGATIVE INTAKE STATE MACHINE
     // ---------------------------------------------------------
     if (investigation.step === 'awaiting_product') {
@@ -785,20 +841,19 @@ export default function AgentScreenComponent() {
     }
 
     if (investigation.step === 'awaiting_code') {
-      const lower = query.toLowerCase();
       const isNegative =
-        lower.includes('no') ||
-        lower.includes('none') ||
-        lower.includes("don't") ||
-        lower.includes('dont') ||
-        lower.includes('rubbed') ||
-        lower.includes('torn') ||
-        lower.includes('not have') ||
-        lower.includes('not sure') ||
-        lower.includes('cant') ||
-        lower.includes('cannot') ||
-        lower.includes('damaged') ||
-        lower.length < 3;
+        lowerQ.includes('no') ||
+        lowerQ.includes('none') ||
+        lowerQ.includes("don't") ||
+        lowerQ.includes('dont') ||
+        lowerQ.includes('rubbed') ||
+        lowerQ.includes('torn') ||
+        lowerQ.includes('not have') ||
+        lowerQ.includes('not sure') ||
+        lowerQ.includes('cant') ||
+        lowerQ.includes('cannot') ||
+        lowerQ.includes('damaged') ||
+        lowerQ.length < 3;
 
       if (isNegative) {
         // Fallback to in-chat Front & Back photo evidence card!
@@ -873,7 +928,6 @@ export default function AgentScreenComponent() {
     }
 
     // Check if user says they bought or found a fake product to trigger investigation
-    const lowerQ = query.toLowerCase();
     const isReportTrigger =
       lowerQ.includes('bought a fake') ||
       lowerQ.includes('bought fake') ||
