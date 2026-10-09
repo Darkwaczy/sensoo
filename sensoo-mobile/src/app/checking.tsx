@@ -140,6 +140,24 @@ export default function CheckingScreen() {
         region: 'London / Lagos (Concurrent)',
         telemetry: { lat: 51.5074, lng: -0.1278, velocity: '2,850 km/h (Impossible)', time: now },
       };
+    } else if (
+      scannedCode.includes('6971764150130') ||
+      scannedCode.includes('DRL-1431') ||
+      scannedCode.includes('150130') ||
+      scannedCode.includes('RASHEL')
+    ) {
+      computedVerdict = {
+        code: scannedCode,
+        name: 'Dr. Rashel Face Care 50ml',
+        brand: 'Yiwu Rashel Trading Co., Ltd',
+        batch: 'BATCH-DRL-1431',
+        status: 'GENUINE',
+        title: '✓ Authentic Product Verified',
+        description:
+          'Verified by Manufacturer. Registered in national trade database, active batch, and authorized for distribution.',
+        region: 'Lagos, Nigeria',
+        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Normal Physics)', time: now },
+      };
     } else {
       // Default: Genuine Verified product
       computedVerdict = {
@@ -251,6 +269,20 @@ export default function CheckingScreen() {
         } else if (scannedCode.includes('1099') || scannedCode === 'SNS-BABY-1099') {
           scenario = 'WRONG_REGION';
         }
+      }
+
+      // Explicit override for registered Dr. Rashel physical product
+      if (
+        scannedCode.includes('6971764150130') ||
+        scannedCode.includes('DRL-1431') ||
+        scannedCode.includes('150130') ||
+        scannedCode.includes('RASHEL')
+      ) {
+        scenario = 'AUTHENTIC';
+        resolvedName = 'Dr. Rashel Face Care 50ml';
+        resolvedBrand = 'Yiwu Rashel Trading Co., Ltd';
+        resolvedBatch = 'BATCH-DRL-1431';
+        resolvedReason = 'Verified by Manufacturer. Registered in national trade database, active batch, and verified authentic.';
       }
 
       if (params.origin === 'chat') {

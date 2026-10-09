@@ -17,8 +17,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import { sendAgentMessage } from '../services/sensooAiService';
-import { parseVoiceCommand } from '../services/voiceAssistantService';
+import { parseVoiceCommand, transcribeAudioWithGroq } from '../services/voiceAssistantService';
 
 type AgentScreen =
   | 'home'
@@ -241,6 +247,38 @@ const getScanResultCardData = (scenario: string, scanCode: string, productName: 
     };
   }
 
+  const isDrRashel =
+    scanCode.includes('6971764150130') ||
+    scanCode.includes('DRL-1431') ||
+    scanCode.includes('150130') ||
+    (productName && productName.toLowerCase().includes('rashel'));
+
+  if (isDrRashel) {
+    return {
+      scenario: 'AUTHENTIC',
+      title: 'Authentic Product',
+      subtitle: 'This product matches official manufacturer records.',
+      titleColor: '#059669',
+      heroImage: require('../../assets/icons/hero_authentic.png'),
+      productImage: require('../../assets/cerave_foaming.png'),
+      productName: productName || 'Dr. Rashel Face Care 50ml',
+      statusBadgeText: 'Verified by Manufacturer',
+      statusBadgeBg: '#DCFCE7',
+      statusBadgeColor: '#059669',
+      details: [
+        { label: 'Brand', value: 'Dr. Rashel' },
+        { label: 'Manufacturer', value: 'Yiwu Rashel Trading Co., Ltd' },
+        { label: 'Barcode', value: scanCode || '6971764150130' },
+        { label: 'Batch Number', value: 'BATCH-DRL-1431' },
+        { label: 'Expiry Date', value: 'Jan 2028' },
+        { label: 'Category', value: 'Skincare' },
+        { label: 'Country of Origin', value: 'China (P.R.C.)' },
+      ],
+      calloutText: 'This product matches official records from the manufacturer.',
+      calloutType: 'success',
+    };
+  }
+
   // Default: Authentic
   return {
     scenario: 'AUTHENTIC',
@@ -313,6 +351,57 @@ export default function AgentScreenComponent() {
   const [voiceInputQuery, setVoiceInputQuery] = useState('');
   const [isListeningMic, setIsListeningMic] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>(persistentChatHistory);
+
+  // In-place native audio recording for Agent "Tap to speak"
+  const agentAudioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const isAgentTranscribingRef = React.useRef(false);
+
+  const toggleAgentMicRecording = async () => {
+    if (isListeningMic) {
+      setIsListeningMic(false);
+      try {
+        if (agentAudioRecorder.isRecording) {
+          await agentAudioRecorder.stop();
+          const recUri = agentAudioRecorder.uri;
+          if (recUri && !isAgentTranscribingRef.current) {
+            isAgentTranscribingRef.current = true;
+            try {
+              const transcript = await transcribeAudioWithGroq(recUri);
+              if (transcript && transcript.trim().length > 0) {
+                handleSendPrompt(transcript.trim());
+              }
+            } catch (err) {
+              console.warn('Agent Whisper transcription error:', err);
+            } finally {
+              isAgentTranscribingRef.current = false;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error stopping agent recording:', err);
+      }
+      return;
+    }
+
+    try {
+      stopSpeakingAudio();
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Microphone Permission', 'Please grant microphone access to use voice prompts.');
+        return;
+      }
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await agentAudioRecorder.prepareToRecordAsync();
+      agentAudioRecorder.record();
+      setIsListeningMic(true);
+    } catch (err) {
+      console.warn('Error starting agent recording:', err);
+      setIsListeningMic(false);
+    }
+  };
 
   // Active Investigative Intake Dossier State
   const [investigation, setInvestigation] = useState<{
@@ -1489,27 +1578,24 @@ export default function AgentScreenComponent() {
 
             {/* Big Green Mic "Tap to speak" */}
             <View style={styles.bigMicContainer}>
-              <View style={styles.bigMicGlowAura}>
+              <View style={[styles.bigMicGlowAura, isListeningMic && { backgroundColor: 'rgba(239, 68, 68, 0.25)' }]}>
                 <TouchableOpacity
-                  style={styles.bigMicCircle}
+                  style={[styles.bigMicCircle, isListeningMic && { backgroundColor: '#EF4444' }]}
                   activeOpacity={0.85}
-                  onPress={() => {
-                    stopSpeakingAudio();
-                    setVoiceAiReply(null);
-                    setVoiceUserPrompt(null);
-                    setVoiceStatus('listening');
-                    setCurrentScreen('listening');
-                  }}
+                  onPress={toggleAgentMicRecording}
                 >
                   <Image
                     source={require('../../assets/icons/icon_ai_mic.png')}
-                    style={styles.bigMicIconImg}
+                    style={[styles.bigMicIconImg, isListeningMic && { tintColor: '#FFFFFF' }]}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.bigMicLabel}>Tap to speak</Text>
+              <Text style={[styles.bigMicLabel, isListeningMic && { color: '#EF4444', fontWeight: '800' }]}>
+                {isListeningMic ? 'Recording... (Tap to stop)' : 'Tap to speak'}
+              </Text>
             </View>
+
               </View>
             )}
           </ScrollView>

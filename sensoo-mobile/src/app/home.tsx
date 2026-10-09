@@ -18,12 +18,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import { sendAgentMessage } from '../services/sensooAiService';
 import {
   getVoiceAssistantSettings,
   subscribeVoiceAssistantSettings,
   parseVoiceCommand,
   VoiceAssistantSettings,
+  transcribeAudioWithGroq,
 } from '../services/voiceAssistantService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -440,64 +447,120 @@ export default function HomeScreen() {
     };
   }, [isVoiceListening]);
 
-  const toggleVoiceAssistant = () => {
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const isTranscribingRef = useRef(false);
+  const autoStopTimerRef = useRef<any>(null);
+
+  const stopAndExecuteVoice = async () => {
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+    setIsVoiceListening(false);
+
+    try {
+      console.log('[VoiceAssistant] Auto-stopping recording...');
+      await audioRecorder.stop();
+      const recordedUri = audioRecorder.uri;
+      console.log('[VoiceAssistant] Recorded URI:', recordedUri);
+
+      if (recordedUri && !isTranscribingRef.current) {
+        isTranscribingRef.current = true;
+        try {
+          const transcript = await transcribeAudioWithGroq(recordedUri);
+          console.log('[VoiceAssistant] Groq Whisper transcript:', transcript);
+          if (transcript && transcript.trim().length > 0) {
+            handleVoiceCommand(transcript.trim());
+          }
+        } catch (err) {
+          console.warn('[VoiceAssistant] Groq Whisper transcription error:', err);
+        } finally {
+          isTranscribingRef.current = false;
+        }
+      }
+    } catch (err) {
+      console.warn('[VoiceAssistant] Error stopping recording:', err);
+    }
+  };
+
+  const toggleVoiceAssistant = async () => {
+    // If already recording and tapped again, stop immediately early
     if (isVoiceListening) {
-      setIsVoiceListening(false);
-      try {
-        Speech.stop();
-      } catch {}
+      await stopAndExecuteVoice();
       return;
     }
 
-    setIsVoiceListening(true);
     try {
-      Speech.stop();
-      Speech.speak('Listening...', {
-        language: 'en-US',
-        pitch: 1.05,
-        rate: 1.0,
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Microphone Permission', 'Please grant microphone access to use voice commands.');
+        return;
+      }
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
-    } catch (e) {
-      console.warn('Speech error:', e);
+
+      console.log('[VoiceAssistant] Listening to voice...');
+      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      audioRecorder.record();
+      setIsVoiceListening(true);
+
+      // Single Tap Experience: listens for 3.5s command window then auto-executes seamlessly
+      if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = setTimeout(() => {
+        stopAndExecuteVoice();
+      }, 3500);
+    } catch (err) {
+      console.warn('[VoiceAssistant] Error starting voice recording:', err);
+      setIsVoiceListening(false);
     }
   };
+
+
 
   const handleVoiceCommand = (cmd: string) => {
     setIsVoiceListening(false);
+    try {
+      Speech.stop();
+    } catch {}
+
     const parsed = parseVoiceCommand(cmd);
+    console.log('[VoiceAssistant] Parsed Intent:', parsed.intent, 'for text:', cmd);
 
     if (parsed.intent === 'SCAN') {
-      try {
-        Speech.stop();
-        Speech.speak('Opening camera scanner.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
-      } catch {}
-      setTimeout(() => router.push('/scanner'), 400);
+      router.push('/scanner');
     } else if (parsed.intent === 'CLINIC') {
-      try {
-        Speech.stop();
-        Speech.speak('Finding accredited clinics.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
-      } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } }), 400);
+      router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } });
     } else if (parsed.intent === 'REPORT') {
-      try {
-        Speech.stop();
-        Speech.speak('Opening NAFDAC report intake.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
-      } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } }), 400);
+      router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } });
     } else if (parsed.intent === 'HISTORY') {
-      try {
-        Speech.stop();
-        Speech.speak('Opening scan history.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
-      } catch {}
       setActiveView('RecentScans');
+    } else if (parsed.intent === 'ALERTS') {
+      setActiveView('Alerts');
+    } else if (parsed.intent === 'PROFILE') {
+      setActiveView('Profile');
+    } else if (parsed.intent === 'NOTIFICATIONS') {
+      setPreviousView(activeView);
+      setActiveView('Notifications');
+    } else if (parsed.intent === 'PERSONAL_INFO') {
+      setShowPersonalInfoModal(true);
+    } else if (parsed.intent === 'PRIVACY_SECURITY') {
+      router.push('/privacy-security' as any);
+    } else if (parsed.intent === 'LOCATION_REGION') {
+      router.push('/location-region' as any);
+    } else if (parsed.intent === 'ABOUT') {
+      router.push('/about-sensoo' as any);
+    } else if (parsed.intent === 'GUIDANCE') {
+      router.push({ pathname: '/agent', params: { query: cmd } });
     } else {
-      try {
-        Speech.stop();
-        Speech.speak('Opening AI guidance.', { language: 'en-US', pitch: 1.05, rate: 1.0 });
-      } catch {}
-      setTimeout(() => router.push({ pathname: '/agent', params: { initialScreen: 'safety_guidance' } }), 400);
+      // UNKNOWN: do not arbitrarily jump into agent or another page!
+      console.log('[VoiceAssistant] Command not recognized, staying on current screen.');
     }
   };
+
+
+
 
   // Continuous pulsating ripple animation for Agent nav button
   const agentPulseValue = React.useRef(new Animated.Value(0)).current;
@@ -1669,49 +1732,10 @@ export default function HomeScreen() {
       </Modal>
 
       {/* ======================================================== */}
-      {/* FLOATING "HEY SENSOO" COMMAND EXECUTION BANNER */}
-      {/* ======================================================== */}
-      {voiceNotice && (
-        <View style={styles.voiceFloatingBanner}>
-          <View style={styles.voiceFloatingGlowRing}>
-            <Text style={{ fontSize: 13 }}>🎙️</Text>
-          </View>
-          <Text style={styles.voiceFloatingBannerText}>{voiceNotice}</Text>
-        </View>
-      )}
-
-      {/* ======================================================== */}
       {/* FLOATING QUICK VOICE COMMANDER BUTTON */}
       {/* ======================================================== */}
       {voiceSettings.enabled && (
         <View style={styles.floatingVoiceContainer} pointerEvents="box-none">
-          {/* Direct Quick Actions when Listening */}
-          {isVoiceListening && (
-            <View style={styles.voiceQuickActionsRow}>
-              <TouchableOpacity
-                style={styles.voiceQuickPill}
-                activeOpacity={0.8}
-                onPress={() => handleVoiceCommand('scan')}
-              >
-                <Text style={styles.voiceQuickPillText}>📷 Scan</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.voiceQuickPill}
-                activeOpacity={0.8}
-                onPress={() => handleVoiceCommand('clinic')}
-              >
-                <Text style={styles.voiceQuickPillText}>🏥 Clinic</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.voiceQuickPill}
-                activeOpacity={0.8}
-                onPress={() => handleVoiceCommand('report')}
-              >
-                <Text style={styles.voiceQuickPillText}>🛡️ Report</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           <TouchableOpacity
             style={[
               styles.heartPumpFloatingBtn,
@@ -1755,6 +1779,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
+
 
       {/* ======================================================== */}
       {/* PERMANENT BOTTOM NAVIGATION BAR */}
