@@ -4,6 +4,8 @@ uvicorn==0.54.0
 sqlmodel==0.0.22
 pydantic-settings==2.15.0
 python-dotenv==1.2.4
+httpx>=0.27.0
+
 
 # msflib — install separately using the private token:
 # pip install "msflib @ git+https://<TOKEN>@github.com/msflib/fastapi.git@core-v0.2.1#subdirectory=core"
