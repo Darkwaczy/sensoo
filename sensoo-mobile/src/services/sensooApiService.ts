@@ -63,7 +63,7 @@ export async function verifyScanOnline(
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout to handle Render cold-starts
 
   try {
     const response = await fetch(`${SENSOO_API_BASE_URL}/scan`, {
@@ -86,7 +86,7 @@ export async function verifyScanOnline(
     return data;
   } catch (error) {
     clearTimeout(timeoutId);
-    console.warn('Sensoo API request failed or timed out:', error);
+    console.warn('Sensoo API request notice (switching to resilient fallback if server cold-starting):', error);
     throw error;
   }
 }
