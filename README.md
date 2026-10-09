@@ -5,13 +5,14 @@
 <img src="sensoo-mobile/assets/logo.png" alt="Sensoo Logo" width="240" />
 <br/><br/>
 
-**Real-time product verification and anti-counterfeit detection engine.**
+**Real-Time Product Verification & Anti-Counterfeit Telemetry System**
 
 Built for the KodeHauz@10 Hackathon &middot; Decennium Sprint
 
-[![React Native](https://img.shields.io/badge/React_Native-Expo_57-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://reactnative.dev)
-[![KodeHauz MSFlib](https://img.shields.io/badge/Engine-KodeHauz_MSFlib-0E3B20?style=flat-square)](https://github.com/mavlon00/sensoo)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.1.0-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React Native](https://img.shields.io/badge/React_Native-Expo_52+-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://reactnative.dev)
+[![KodeHauz MSFlib](https://img.shields.io/badge/Engine-KodeHauz_MSFlib_v0.2.1-0E3B20?style=flat-square)](https://github.com/mavlon00/sensoo-app-final)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.143.0-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![EMDEX API](https://img.shields.io/badge/Registry-EMDEX_Nigeria-107C41?style=flat-square)](https://sandbox.emdexapi.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Gemini](https://img.shields.io/badge/Gemini-3.1_Flash_Lite-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
@@ -21,354 +22,155 @@ Built for the KodeHauz@10 Hackathon &middot; Decennium Sprint
 
 ---
 
-## Overview
+## Executive Summary
 
-Counterfeit medicines, packaged foods, and cosmetics are a major public safety crisis in Nigeria and broader African markets. Existing verification systems rely on static scratch-off SMS codes that counterfeiters easily clone, reuse, or print onto fake packaging in bulk.
+**Sensoo** is a full-stack anti-counterfeit verification platform that protects consumers and supply chains from fake pharmaceuticals, toxic cosmetics, and adulterated consumer goods across Nigeria and emerging markets.
 
-**Sensoo** solves this by pairing product verification codes with **instant geospatial and temporal telemetry**, powered by the **KodeHauz MSFlib** verification engine. When a consumer or merchant scans a product, the client records GPS coordinates and UTC timestamps. The backend validates whether the scan respects physical laws and manufacturer supply-chain boundaries before certifying authenticity.
-
----
-
-## Sensoo Agentic AI — Dual-Brain Consumer Safety Intelligence
-
-Sensoo includes a fully conversational **Agentic AI assistant** that consumers can talk to (via voice or text) to understand scan results, get clinical safety guidance, find nearby hospitals, and report suspicious products — all in their native Nigerian language.
-
-### What the AI Agent Can Do
-
-| Capability | Description |
-|:---|:---|
-| **Explain a Scan** | Breaks down why a product was flagged (counterfeit barcode, impossible travel speed, cloned packaging, wrong region) in plain, non-technical language |
-| **Clinical Safety Triage** | If a consumer already took a counterfeit medicine: asks what they took, how much, and when — then provides immediate safety steps and urges hospital evaluation |
-| **Find Nearby Help** | Shows accredited clinics and hospitals (LUTH Surulere, Reddington, Ikeja General) with distance, rating, and one-tap call |
-| **Report a Product** | Guides the consumer through filing a suspicious product report, dispatched to NAFDAC Sentinel threat clusters |
-| **Voice Interaction** | Full voice input (speech-to-text) and voice output (text-to-speech) — the consumer can speak their question and hear the AI reply out loud |
-| **5 Nigerian Languages** | Responds fluently in **English**, **Nigerian Pidgin**, **Yorùbá**, **Hausa**, and **Igbo** |
-
-### Dual-Brain Architecture
-
-The AI uses two intelligence layers working together:
-
-```
-Consumer speaks/types question
-        │
-        ▼
-┌────────────────────────────────────────────────────────────┐
-│                    sensooAiService.ts                       │
-│                 (Frontend AI Orchestrator)                  │
-│                                                            │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  BRAIN 1: Google Gemini 3.1 Flash Lite (Primary)     │  │
-│  │  → Counterfeit forensics, drug toxicology,           │  │
-│  │    clinical safety reasoning, contextual dialogue    │  │
-│  │                                                      │  │
-│  │  FALLBACK: Gemini 2.5 Flash Lite                     │  │
-│  │  → Auto-switches if primary model is unavailable     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                            │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  BRAIN 2: NCAIR1/N-ATLaS (Nigerian Sovereign AI)    │  │
-│  │  → Nigerian language detection & fluent response     │  │
-│  │    generation in Pidgin, Yorùbá, Hausa, Igbo         │  │
-│  │  → Offline-capable local vernacular safety cache     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                            │
-│  Context injected per query:                               │
-│  • Product name, scanned code, verification status         │
-│  • User location, selected language                        │
-│  • Conversation history (multi-turn memory)                │
-└────────────────────────────────────────────────────────────┘
-        │
-        ▼
-  Voice speaks answer aloud + displays text on screen
-```
-
-### Technology Stack
-
-| Layer | Technology | Purpose |
-|:---|:---|:---|
-| **Nigerian Language Processing** | [NCAIR1/N-ATLaS](https://huggingface.co/NCAIR1/N-ATLaS) (Hugging Face) | Fluent responses in Yorùbá, Hausa, Igbo, and Nigerian Pidgin using Nigeria's sovereign AI model |
-| **Core Reasoning** | Google Gemini 3.1 Flash Lite (primary) / Gemini 2.5 Flash Lite (fallback) | Counterfeit forensics, drug toxicology analysis, clinical safety guidance |
-| **Voice Synthesis** | expo-speech (device neural TTS) | Reads AI responses aloud through device speakers |
-| **Voice Input** | Web Speech Recognition API | Listens to spoken questions from consumers in market environments |
-| **Verification Engine** | KodeHauz MSFlib + FastAPI backend | 4-alarm product verification with geo-velocity anomaly detection |
-
-### How the Fallback Chain Works
-
-The AI never leaves the consumer without an answer:
-
-1. **Try Gemini 3.1 Flash Lite** → Full contextual response with product forensics
-2. **If 3.1 fails → Try Gemini 2.5 Flash Lite** → Same quality, different model endpoint
-3. **If both fail → N-ATLaS Local Cache** → Pre-built fluent responses in all 5 languages, available offline — the consumer always gets a clinically accurate safety response even without internet
-
-### Example AI Interactions
-
-**English — Explaining a counterfeit scan:**
-> "This Paracetamol 500mg was flagged as counterfeit. The barcode does not match any authorized NAFDAC manufacturer records. Do not consume this product. If you already took it, drink clean water and visit the nearest accredited clinic."
-
-**Nigerian Pidgin — Clinical safety triage:**
-> "🚨 OYA LISTEN: If you don already drink this medicine, stop am immediately! Drink plenty clean water. If your eye dey turn you or belle dey pain you, sharp-sharp make you go LUTH hospital for Surulere or call 112 emergency now-now."
-
-**Yorùbá — Product alert:**
-> "⚠️ Oogun yi jẹ ayederu. Koodu ati nọmba re ko ba iwe NAFDAC mu rara. E jọwọ, ẹ ma ṣe lo oogun yi tabi ta fun ẹnikẹni!"
+By pairing product codes with **real-time geospatial and temporal telemetry**, Sensoo evaluates scans against **KodeHauz MSFlib engine rules** to detect cloned labels, regional diversion, and impossible flight-speed travel anomalies before certifying authenticity.
 
 ---
 
-## Detection Rules Engine
-
-Every scan submitted via the client evaluates four core heuristics:
-
-| Rule | Trigger Condition | Alarm Code |
-| :--- | :--- | :--- |
-| **Whitelist Validation** | Scanned code does not exist in the manufacturer batch database. | `INVALID_CODE` |
-| **Clone & Reuse Check** | Code exists, but its lifecycle state is already `PURCHASED_RETIRED`. | `ALREADY_PURCHASED` |
-| **Impossible Physics** | Travel speed between consecutive scans exceeds physical travel limits: <br> `velocity = haversine_distance(loc1, loc2) / elapsed_time > 900 km/h` | `IMPOSSIBLE_PHYSICS` |
-| **Regional Diversion** | First scan occurs outside the manufacturer's designated delivery region. | `WRONG_REGION` |
-
-### Lifecycle State Machine
+## 🏗️ Architecture & Monorepo Structure
 
 ```
-[REGISTERED] -> [SHIPPED] -> [IN_STOCK] -> [PURCHASED_RETIRED]
-                   |             |
-           (Merchant scan)  (Consumer scan)
-```
-
-Once a consumer successfully verifies a product, the code is retired. If that same barcode is ever scanned again anywhere else in the country, the system flags an immediate clone alarm.
-
----
-
-## Repository Structure
-
-```
-sensoo/
-├── backend/
-│   ├── main.py               # FastAPI application with /scan and /feed routes
-│   ├── sensoo_core.py        # Verification heuristics and Haversine distance math
-│   ├── msflib.py             # In-memory persistence and telemetry registry
-│   └── requirements.txt      # API dependencies
+sensoo/ (branch: main)
+├── sensoo-backend/            # KodeHauz MSFlib FastAPI Backend Server
+│   ├── app/
+│   │   ├── actions.py         # MSFlib ModelAction 4-Alarm Verification Engine
+│   │   ├── ai_router.py       # MSFlib AI API Transport Router (/api/v1/ai/*)
+│   │   ├── online_db_service.py # Real-Time EMDEX & Global Barcode API Gateway
+│   │   ├── db.py              # SQLModel Database Engine & Session Provider
+│   │   ├── main.py            # FastAPI Entry Point with CORS & EventBus Emitter
+│   │   ├── models.py          # MSFlib ModelBase Schema Definitions
+│   │   ├── router.py          # Sensoo API Router (/api/v1/*)
+│   │   └── settings.py        # Environment & Configuration Settings
+│   ├── requirements.txt       # Dependencies (FastAPI, SQLModel, httpx, uvicorn)
+│   ├── Procfile               # Deployment Process Manager
+│   └── render.yaml            # Render Cloud Deployment Blueprint
 │
-├── sensoo-mobile/
-│   ├── src/app/              # Expo Router file-based screens
-│   │   ├── home.tsx          # Consumer dashboard with scan history & profile
-│   │   ├── scanner.tsx       # Barcode/QR camera scanner
-│   │   ├── result.tsx        # Verification result screen (AUTHENTIC / FAKE)
-│   │   ├── agent.tsx         # Sensoo AI Voice Agent (10 sub-screens)
-│   │   └── sentinel.tsx      # NAFDAC regulatory threat cluster dashboard
-│   ├── src/services/
-│   │   └── sensooAiService.ts  # Dual-Brain AI orchestrator (Gemini + N-ATLaS)
-│   ├── assets/               # Production assets (3D graphics, brand assets, icons)
-│   └── package.json          # Mobile dependencies and run scripts
-│
-├── AGENTS.md                 # Project guidelines & fraud detection rules
-├── .gitignore
+├── sensoo-mobile/             # Consumer Mobile Application (Expo / React Native)
+│   ├── src/
+│   │   ├── app/               # Expo Router File-Based Navigation (Scanner, Agent, Feed)
+│   │   ├── components/        # Reusable UI Elements, Verdict Cards, Maps
+│   │   └── services/          # Sensoo API Service, Dual-Brain AI Service, Voice Service
+│   ├── assets/                # Logos, 3D Shields, Product Images
+│   └── package.json           # Dependencies (React Native, Expo, Lucide)
 └── README.md
 ```
 
 ---
 
-## Running Locally
+## ⚡ KodeHauz MSFlib Framework Integration
 
-### 1. Verification API (Backend)
+The backend is built natively on top of the **KodeHauz `msflib` framework (v0.2.1)**:
 
-The backend is built with FastAPI and runs on Python 3.10+.
+| MSFlib Component | Architectural Role in Sensoo |
+| :--- | :--- |
+| **`msflib.models.ModelBase`** | Base schema inheritance for `ProductCode` and `ScanTelemetryRecord` tables, providing automated primary keys, timestamps, and JSON serialization. |
+| **`msflib.actions.ModelAction`** | Encapsulates transaction-safe CRUD data access and extends verification execution logic in `VerificationAction`. |
+| **`msflib.eventbus.bind_app_emitter`** | Binds the `msflib` event emitter to the FastAPI application instance for real-time telemetry broadcasts. |
+| **`msflib.ai_api`** | Standardized AI transport specification defining `/api/v1/ai/ask`, `/api/v1/ai/search`, and `/api/v1/ai/status`. |
 
-```bash
-cd backend
+---
 
-# Create and activate environment
-python -m venv .venv
-source .venv/bin/activate       # macOS/Linux
-# .venv\Scripts\activate        # Windows
+## 🌐 Real-Time Online Database Integrations
 
-# Install dependencies and start server
+In addition to local database verification, `sensoo-backend` queries online databases in real time whenever an unseeded barcode or drug is scanned:
+
+1. **EMDEX Nigeria Pharmaceutical Database API (`sandbox.emdexapi.com`)**
+   * Verifies registered pharmaceutical brand names, active ingredients, dosage strengths, and licensed manufacturers in Nigeria.
+2. **Global Consumer Barcode Registry API (`world.openfoodfacts.org`)**
+   * Real-time GTIN / EAN-13 barcode lookups for packaged foods, beverages, cosmetics, and household items.
+
+---
+
+## 🛡️ The 4 Mandatory Security Alarms
+
+When a scan payload `{ code, role, lat, lng, timestamp, device_id, region }` is received at `/api/v1/scan`, it is evaluated against 4 alarm rules:
+
+1. **Invalid Code:** Code does not exist in manufacturer database, EMDEX registry, or Global Barcode index.
+2. **Already Purchased (Clone Reuse):** Code exists, but its lifecycle state is marked `PURCHASED` or `RETIRED`. High probability of cloned packaging.
+3. **Geo-Velocity Anomaly ("Impossible Physics"):** Calculates travel velocity between consecutive scans using the **Haversine formula**:
+   $$\text{Velocity} = \frac{\text{HaversineDistance}(\text{loc}_1, \text{loc}_2)}{\Delta t} > 900 \text{ km/h}$$
+   Flags concurrent clone distribution circulating in distant cities.
+4. **Supply Chain Diversion (Wrong Region):** Scanned outside the manufacturer's authorized distribution region.
+
+---
+
+## 🤖 Dual-Brain Agentic AI System
+
+Sensoo features a voice and text conversational assistant with **Dual-Brain Orchestration**:
+
+* **Brain 1 — `NCAIR1/N-ATLaS` (Sovereign Language Core):**
+  Understands Nigerian cultural context, local markets (Idumota, Balogun, Ariaria, Alaba, Wuse), and indigenous Nigerian languages (**Pidgin**, **Yorùbá**, **Hausa**, **Igbo**).
+* **Brain 2 — `Gemini 3.1 / 2.5 Flash Lite` (Reasoning & Action Core):**
+  Parses intents, performs clinical safety triage if counterfeit medication was ingested, and executes autonomous UI tool calls:
+  * `trigger_camera_scan`: Automatically launches the camera barcode scanner.
+  * `submit_fraud_report`: Automatically files a dossier to NAFDAC Sentinel surveillance.
+
+---
+
+## 📡 API Reference & Endpoints
+
+**Live Production Base URL:** `https://sensoo-app-final-2.onrender.com`  
+**Interactive Swagger Docs:** `https://sensoo-app-final-2.onrender.com/docs`
+
+### Core Verification & Telemetry
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/scan` | Submits scan telemetry (`code, lat, lng, device_id`) and returns verification status & alarms. |
+| `POST` | `/api/v1/register` | Registers new genuine product barcodes into the manufacturer registry. |
+| `GET` | `/api/v1/feed` | Returns live scan telemetry activity feed for NAFDAC-style monitoring maps (`?limit=50`). |
+| `GET` | `/api/v1/health` | Health check endpoint returning backend service status. |
+
+### MSFlib AI Transport Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/ai/ask` | Accepts health or safety queries and returns MSFlib RAG guidance enriched with live EMDEX lookups. |
+| `POST` | `/api/v1/ai/search` | Performs real-time similarity search over EMDEX and verified product indices. |
+| `GET` | `/api/v1/ai/status` | Returns MSFlib AI engine module and vector backend status. |
+
+---
+
+## 🚀 Local Development Setup
+
+### 1. Backend Setup (`sensoo-backend`)
+
+```powershell
+# Navigate to backend directory
+cd sensoo-backend
+
+# Install Python dependencies
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+
+# Run backend development server
+uvicorn app.main:app --reload --port 8000
 ```
 
-Interactive API docs will be available at `http://localhost:8000/docs`.
+### 2. Mobile App Setup (`sensoo-mobile`)
 
-**Live Deployment:** https://sensoo-app-final-2.onrender.com  
-**Swagger Docs:** https://sensoo-app-final-2.onrender.com/docs
-
-### 2. Consumer Mobile App (Frontend)
-
-The mobile application is built with Expo (React Native) and TypeScript.
-
-```bash
+```powershell
+# Navigate to mobile directory
 cd sensoo-mobile
 
 # Install packages
 npm install
 
-# Start development bundler
+# Configure environment variables (.env)
+# EXPO_PUBLIC_API_URL=http://localhost:8000/api/v1
+# EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_key
+
+# Start Expo development server
 npx expo start
 ```
 
-* Press **`w`** in the terminal to open the web preview in your browser.
-* Scan the terminal QR code with the **Expo Go** app on iOS or Android.
-
-### 3. Environment Variables (Mobile)
-
-Create `sensoo-mobile/.env` (never commit this file):
-
-```env
-EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
-EXPO_PUBLIC_HF_NATLAS_MODEL=NCAIR1/N-ATLaS
-EXPO_PUBLIC_API_URL=https://sensoo-app-final-2.onrender.com/api/v1
-```
+* Press **`w`** for web browser preview or scan the QR code with **Expo Go** on Android / iOS.
 
 ---
 
-## API Contract
+## 📜 License & Credits
 
-**Base URL:** `https://sensoo-app-final-2.onrender.com`
-
-### 1. Scan Product
-
-```http
-POST /scan
-Content-Type: application/json
-```
-
-**Request Payload:**
-```json
-{
-  "role": "consumer",
-  "code": "UNL-9X4-B2P",
-  "lat": 6.5244,
-  "lng": 3.3792,
-  "timestamp": "2026-10-02T14:30:00Z",
-  "device_id": "expo-device-abc123"
-}
-```
-
-| Field | Type | Required | Description |
-|:---|:---|:---|:---|
-| `role` | string | ✅ | Always `"consumer"` for mobile app scans |
-| `code` | string | ✅ | Scanned barcode / QR code string |
-| `lat` | float | ✅ | GPS latitude from device location |
-| `lng` | float | ✅ | GPS longitude from device location |
-| `timestamp` | string | ✅ | ISO-8601 UTC scan timestamp |
-| `device_id` | string | ⚠️ Recommended | Unique device identifier for clone detection across phones |
-
-**Authentic Response:**
-```json
-{
-  "status": "AUTHENTIC",
-  "reason": "Scan accepted – state now PURCHASED_RETIRED",
-  "alarms": [],
-  "new_state": "PURCHASED_RETIRED",
-  "product_name": "Paracetamol 500mg",
-  "manufacturer": "Emzor Pharma",
-  "batch": "EMZ-2026-0847"
-}
-```
-
-**Flagged Response (Impossible Travel Speed):**
-```json
-{
-  "status": "FAKE",
-  "reason": "Impossible Physics – 850 km in 0.2 h (4250 km/h)",
-  "alarms": ["IMPOSSIBLE_PHYSICS"],
-  "new_state": "IN_STOCK",
-  "product_name": "Paracetamol 500mg",
-  "manufacturer": "Emzor Pharma",
-  "batch": "EMZ-2026-0847"
-}
-```
-
-**Flagged Response (Unknown Code):**
-```json
-{
-  "status": "FAKE",
-  "reason": "Code not found in manufacturer registry",
-  "alarms": ["INVALID_CODE"],
-  "new_state": null,
-  "product_name": null,
-  "manufacturer": null,
-  "batch": null
-}
-```
-
-| Response Field | Type | Description |
-|:---|:---|:---|
-| `status` | string | `"AUTHENTIC"` or `"FAKE"` |
-| `reason` | string | Human-readable explanation for the verdict |
-| `alarms` | string[] | Array of triggered alarm codes: `INVALID_CODE`, `ALREADY_PURCHASED`, `IMPOSSIBLE_PHYSICS`, `WRONG_REGION` |
-| `new_state` | string \| null | Updated lifecycle state after scan |
-| `product_name` | string \| null | ⚠️ **Needed by frontend** — Product display name |
-| `manufacturer` | string \| null | ⚠️ **Needed by frontend** — Manufacturer name |
-| `batch` | string \| null | ⚠️ **Needed by frontend** — Batch/serial number |
-
-> **⚠️ Note:** Fields marked "Needed by frontend" (`product_name`, `manufacturer`, `batch`) are displayed on the mobile result screen. If not yet implemented in the backend, the frontend will use fallback display values.
-
-### 2. Surveillance Feed
-
-```http
-GET /feed?limit=20
-```
-
-Returns recent scan logs with coordinates and alarm statuses for regulatory oversight and NAFDAC audit dashboards.
-
-**Response:**
-```json
-[
-  {
-    "code": "UNL-9X4-B2P",
-    "role": "consumer",
-    "lat": 6.5244,
-    "lng": 3.3792,
-    "timestamp": "2026-10-02T14:30:00Z",
-    "status": "AUTHENTIC",
-    "alarms": []
-  }
-]
-```
-
----
-
-## Mobile App Screens
-
-| Screen | File | Description |
-|:---|:---|:---|
-| Splash & Onboarding | `splash.tsx`, `onboarding.tsx` | Brand intro, permission requests |
-| Home Dashboard | `home.tsx` | Scan history, profile, quick actions |
-| Barcode Scanner | `scanner.tsx` | Camera-based barcode/QR scanning → calls `POST /scan` |
-| Verification Result | `result.tsx` | Displays AUTHENTIC/FAKE verdict with product details |
-| AI Voice Agent | `agent.tsx` | 10-screen conversational AI assistant with voice I/O |
-| NAFDAC Sentinel | `sentinel.tsx` | Regulatory threat cluster dashboard → uses `GET /feed` |
-
-### AI Voice Agent Sub-Screens (agent.tsx)
-
-1. **Agent Home** — Greeting + action cards + text input bar
-2. **Contextual Suggestion** — Post-scan AI dialogue
-3. **Voice Listening** — Live mic input + AI voice response + audio playback
-4. **Explain Scan** — Detailed breakdown of why a product was flagged
-5. **Safety Guidance** — Clinical triage questionnaire
-6. **Triage Help** — Emergency dosage assessment
-7. **Scan Details** — Full scan metadata view
-8. **Nearby Clinics** — Map/list of accredited hospitals
-9. **Report Product** — Submit suspicious product to NAFDAC
-10. **Report Confirmed** — Submission acknowledgment
-
----
-
-## Frontend → Backend Integration Points
-
-The mobile app needs to call the backend at these points:
-
-| Mobile Screen | Backend Endpoint | What Happens |
-|:---|:---|:---|
-| `scanner.tsx` → `result.tsx` | `POST /scan` | After camera captures barcode, send scan payload, display verdict |
-| `sentinel.tsx` | `GET /feed` | Load recent scan surveillance data for threat cluster map |
-| `agent.tsx` | *N/A (uses Gemini AI)* | AI voice agent uses Google Gemini API directly, not the backend |
-
----
-
-## Team
-
-* **Mavlon** ([@mavlon00](https://github.com/mavlon00)) &mdash; Backend architecture, FastAPI endpoints, KodeHauz MSFlib engine, data layer
-* **Kamalu** ([@Darkwaczy](https://github.com/Darkwaczy)) &mdash; Mobile client, verification UI, Agentic AI integration, voice agent
-
----
-
-Developed for **KodeHauz@10** &middot; 2026
+Built for the **KodeHauz@10 Hackathon Decennium Sprint**.  
+Powered by the **KodeHauz MSFlib Framework**, **EMDEX Nigeria**, **NCAIR N-ATLaS**, and **Google Gemini**.
