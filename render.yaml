@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sensoo-backend
+    runtime: python
+    rootDir: sensoo-backend
+    buildCommand: >-
+      pip install
+      "msflib @ git+https://$MSFLIB_TOKEN@github.com/msflib/fastapi.git@core-v0.2.1#subdirectory=core"
+      fastapi uvicorn sqlmodel pydantic-settings python-dotenv
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MSFLIB_TOKEN
+        sync: false
+      - key: PROJECT_NAME
+        value: Sensoo Backend
+      - key: DATABASE_URL
+        value: sqlite:///./sensoo.db
+    autoDeploy: true
