@@ -1,7 +1,8 @@
-// sensoo-mobile/src/services/sensooApiService.ts
-// Live integration with Sensoo Backend API (https://sensoo-api.onrender.com)
+const DEFAULT_BASE_URL = 'https://sensoo-api.onrender.com/api/v1';
 
-export const SENSOO_API_BASE_URL = 'https://sensoo-api.onrender.com';
+export const SENSOO_API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_URL || DEFAULT_BASE_URL
+).replace(/\/+$/, '');
 
 export interface ScanApiRequest {
   role: 'consumer' | 'merchant';
