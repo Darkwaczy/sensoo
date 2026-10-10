@@ -24,7 +24,7 @@ class AskResponse(BaseModel):
     answer: str
     source_documents: List[Dict[str, str]] = []
     protocol: str = "msflib-ai-api-v0.2.1"
-    model_used: str = "gemini-3.1-flash-lite + msflib-ai"
+    model_used: str = "gemini-3.8-flash + msflib-ai"
 
 
 class SearchRequest(BaseModel):
@@ -49,7 +49,7 @@ def get_ai_status() -> Dict[str, Any]:
         "module": "msflib-ai-api",
         "version": "0.2.1",
         "configured_provider": "google-gemini",
-        "model": "gemini-3.1-flash-lite-preview",
+        "model": "gemini-3.8-flash",
         "status": "active",
         "vector_backend": "sqlite-vss / age-graph",
     }
