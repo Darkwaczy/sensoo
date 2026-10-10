@@ -71,8 +71,15 @@ export default function ScannerScreen() {
     outputRange: [0, RETICLE_SIZE - 6],
   });
 
+  // Candidate buffer to prevent truncated partial barcode reads
+  const pendingShortCodeRef = useRef<{ code: string; timeout: any } | null>(null);
+
   // Navigate to dedicated Checking / Verification screen with real code
   const navigateToChecking = (codeToVerify: string) => {
+    if (pendingShortCodeRef.current) {
+      clearTimeout(pendingShortCodeRef.current.timeout);
+      pendingShortCodeRef.current = null;
+    }
     setIsScanning(false);
     router.push({
       pathname: '/checking',
@@ -82,7 +89,27 @@ export default function ScannerScreen() {
 
   const handleBarcodeScanned = (result: { data: string; type: string }) => {
     if (!isScanning) return;
-    navigateToChecking(result.data);
+    const clean = (result.data || '').trim();
+    if (!clean) return;
+
+    const digitsOnly = clean.replace(/[^0-9]/g, '');
+
+    // Standard retail barcodes (UPC-A: 12 digits, EAN-13: 13 digits, Code-128)
+    if (digitsOnly.length >= 12 || clean.length >= 12) {
+      navigateToChecking(clean);
+      return;
+    }
+
+    // If an 8-11 digit code arrives (possible partial slice of a 12-digit UPC),
+    // debounce for 350ms to allow the camera to capture the full 12/13 digits
+    if (!pendingShortCodeRef.current) {
+      const timeout = setTimeout(() => {
+        if (isScanning) {
+          navigateToChecking(clean);
+        }
+      }, 350);
+      pendingShortCodeRef.current = { code: clean, timeout };
+    }
   };
 
   const handleRequestPermission = async () => {
@@ -108,7 +135,7 @@ export default function ScannerScreen() {
           barcodeScannerSettings={{
             barcodeTypes:
               scanMode === 'barcode'
-                ? ['ean13', 'upc_a', 'code128', 'code39', 'ean8', 'codabar', 'itf14']
+                ? ['ean13', 'upc_a', 'code128', 'itf14']
                 : ['qr', 'datamatrix'],
           }}
           onBarcodeScanned={isScanning ? handleBarcodeScanned : undefined}

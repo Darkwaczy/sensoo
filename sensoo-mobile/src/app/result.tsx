@@ -494,9 +494,9 @@ export default function ResultScreen() {
         {activeScenario === 'ALREADY_PURCHASED' && (
           <View style={styles.purchasedHistoryCard}>
             <View style={styles.purchasedHistoryHeader}>
-              <Text style={styles.purchasedPeopleIcon}>👥</Text>
+              <Text style={styles.purchasedPeopleIcon}>⚠️</Text>
               <Text style={styles.purchasedHistoryTitle}>
-                This barcode has been scanned 5 times before.
+                Duplicate Barcode Telemetry Flagged
               </Text>
             </View>
 
@@ -505,7 +505,7 @@ export default function ResultScreen() {
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
                   <Text style={styles.timelineLoc}>{userCity}</Text>
-                  <Text style={styles.timelineTime}>Today, {nowTime}</Text>
+                  <Text style={styles.timelineTime}>Current Scan · Today, {nowTime}</Text>
                 </View>
               </View>
 
@@ -514,22 +514,10 @@ export default function ResultScreen() {
               <View style={styles.timelineRow}>
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={styles.timelineLoc}>Port Harcourt, Nigeria</Text>
-                  <Text style={styles.timelineTime}>Earlier today</Text>
+                  <Text style={styles.timelineLoc}>Prior Authorized Scan Point</Text>
+                  <Text style={styles.timelineTime}>Earlier Telemetry Record · Already Redeemed</Text>
                 </View>
               </View>
-
-              <View style={styles.timelineConnector} />
-
-              <View style={styles.timelineRow}>
-                <View style={styles.timelineOrangeDot} />
-                <View style={{ marginLeft: 10 }}>
-                  <Text style={styles.timelineLoc}>Abuja, Nigeria</Text>
-                  <Text style={styles.timelineTime}>Previous scan</Text>
-                </View>
-              </View>
-
-              <Text style={styles.timelineMoreScans}>+2 more scans</Text>
             </View>
           </View>
         )}

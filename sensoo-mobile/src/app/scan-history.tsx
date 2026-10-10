@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getCurrentUserLocation } from '../services/clinicService';
+import { fetchLiveFeed } from '../services/sensooApiService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,52 +24,63 @@ export default function ScanHistoryScreen() {
     imageUrl?: string;
   }>();
 
-  const [currentCity, setCurrentCity] = useState('Current Location');
-
-  useEffect(() => {
-    getCurrentUserLocation().then((loc) => {
-      if (loc.city && loc.city !== 'Current Location') {
-        setCurrentCity(loc.city);
-      }
-    });
-  }, []);
-
   const productName = params.name || (params.code ? `Product (${params.code})` : 'Scanned Product');
-  const barcode = params.code || 'UNLISTED';
+  const barcode = (params.code || 'UNLISTED').trim();
   const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const timelineData = [
+  const [currentCity, setCurrentCity] = useState('Current Location');
+  const [timelineData, setTimelineData] = useState<
+    { id: string; time: string; location: string; status: string }[]
+  >([
     {
-      id: 't1',
+      id: 'initial',
       time: `Today, ${now}`,
-      location: currentCity,
-      status: 'Scanned',
+      location: 'Current Location',
+      status: 'Current Scan',
     },
-    {
-      id: 't2',
-      time: 'Earlier today',
-      location: 'Port Harcourt, Nigeria',
-      status: 'Scanned',
-    },
-    {
-      id: 't3',
-      time: 'Yesterday',
-      location: 'Kano, Nigeria',
-      status: 'Scanned',
-    },
-    {
-      id: 't4',
-      time: '3 days ago',
-      location: 'Abuja, Nigeria',
-      status: 'Scanned',
-    },
-    {
-      id: 't5',
-      time: 'Last week',
-      location: 'Enugu, Nigeria',
-      status: 'Scanned',
-    },
-  ];
+  ]);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      getCurrentUserLocation(),
+      fetchLiveFeed(50).catch(() => []),
+    ]).then(([loc, feed]) => {
+      if (!isMounted) return;
+      const city = loc.city && loc.city !== 'Current Location' ? loc.city : 'Current Location';
+      setCurrentCity(city);
+
+      const matchingScans = (feed || []).filter(
+        (item) => item.code && item.code.trim().toUpperCase() === barcode.toUpperCase()
+      );
+
+      if (matchingScans.length > 0) {
+        const liveEvents = matchingScans.map((scan, idx) => ({
+          id: `scan-${scan.id || idx}`,
+          time: scan.timestamp
+            ? new Date(scan.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+            : `Scan #${idx + 1}`,
+          location: scan.lat && scan.lng ? `${scan.lat.toFixed(2)}°N, ${scan.lng.toFixed(2)}°E` : city,
+          status: scan.status === 'FAKE' ? 'Security Alert' : 'Verified Scan',
+        }));
+        setTimelineData(liveEvents);
+      } else {
+        // First scan of this product: strictly 1 real event
+        setTimelineData([
+          {
+            id: 'current-scan',
+            time: `Today, ${now}`,
+            location: city,
+            status: 'First Verified Scan',
+          },
+        ]);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [barcode]);
 
   return (
     <View style={styles.container}>
