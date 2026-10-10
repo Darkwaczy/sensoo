@@ -68,40 +68,7 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
                 is_valid_gs1 = validate_gs1_checksum(clean_digits) if clean_digits else False
                 origin_country = get_gs1_origin(clean_digits) if clean_digits else "International"
 
-                retail_map = {
-                    "8904035427073": ("Karis Naturals Lightening & Clarifying Body Lotion (400ml)", "Karis Naturals / Kunle Ara Pharmacy Distribution"),
-                    "6291236920208": ("Smart Collections Berries Weekend 803 EDP (100ml)", "Smart Collection Perfumes UAE"),
-                    "6971764150130": ("Dr. Rashel Vitamin C Face Serum (50ml)", "Dr. Rashel Skincare"),
-                }
-
-                if clean_digits in retail_map:
-                    p_name, m_name = retail_map[clean_digits]
-                    telemetry = ScanTelemetryRecord(
-                        code=scan_data.code,
-                        role=scan_data.role,
-                        lat=scan_data.lat,
-                        lng=scan_data.lng,
-                        timestamp=scan_time,
-                        alarms=json.dumps([]),
-                        device_id=scan_data.device_id or "UNKNOWN",
-                        product_name=p_name,
-                        manufacturer=m_name,
-                        status="AUTHENTIC",
-                    )
-                    session.add(telemetry)
-                    session.commit()
-
-                    return {
-                        "status": "AUTHENTIC",
-                        "reason": f"Verified Retail Product ({origin_country})",
-                        "alarms": [],
-                        "new_state": "IN_STOCK",
-                        "product_name": p_name,
-                        "manufacturer": m_name,
-                        "batch_id": f"GS1-{clean_digits[-6:]}",
-                        "image_url": None,
-                    }
-                elif is_valid_gs1:
+                if is_valid_gs1:
                     telemetry = ScanTelemetryRecord(
                         code=scan_data.code,
                         role=scan_data.role,
