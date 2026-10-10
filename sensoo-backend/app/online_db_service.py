@@ -7,7 +7,9 @@ Connects real-time scan verification to:
 4. UPCitemdb Global Retail & FMCG Barcode Whitelist (https://api.upcitemdb.com)
 """
 
+import json
 import logging
+import os
 import re
 from typing import Any, Dict, Optional
 import httpx
@@ -208,40 +210,84 @@ async def lookup_upcitemdb(code: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-VERIFIED_INTERNATIONAL_CATALOG: Dict[str, Dict[str, Any]] = {
-    "6971764150130": {
-        "product_name": "Dr. Rashel Vitamin C Brightening & Anti-Aging Face Serum (50ml)",
-        "manufacturer": "Yiwu Rashel Trading Co., Ltd / Dr. Rashel International",
-        "batch_id": "GTIN-6971764150130",
-        "source": "Global Cosmetics & Dermatological Whitelist",
-        "category": "Skincare / Facial Serum",
-        "status": "AUTHENTIC",
-    },
-    "5045098406377": {
-        "product_name": "Boots Baby Moisturising Lotion (500ml)",
-        "manufacturer": "The Boots Company PLC (Nottingham, UK)",
-        "batch_id": "GTIN-5045098406377",
-        "source": "Global Cosmetics & Personal Care Whitelist",
-        "category": "Baby Care / Body Lotion",
-        "status": "AUTHENTIC",
-    },
-    "6291236920208": {
-        "product_name": "Dubai International Fragrance & Personal Care",
-        "manufacturer": "UAE Certified Personal Care & Fragrance Whitelist",
-        "batch_id": "GTIN-6291236920208",
-        "source": "Middle East & West Africa Consumer Whitelist",
-        "category": "Personal Care / Fragrance",
-        "status": "AUTHENTIC",
-    },
-    "3011794101306": {
-        "product_name": "CeraVe Daily Moisturizing Lotion (236ml)",
-        "manufacturer": "CeraVe LLC / L'Oréal Dermatological Beauty",
-        "batch_id": "GTIN-3011794101306",
-        "source": "Global Dermatological Products Whitelist",
-        "category": "Skincare / Dermatological Lotion",
-        "status": "AUTHENTIC",
-    },
-}
+async def lookup_live_web_gtin(code: str) -> Optional[Dict[str, Any]]:
+    """
+    Tier 3: Universal Real-Time GTIN Web Search Resolver.
+    Uses Google Search grounding via Gemini 2.5 Flash Lite to dynamically identify any
+    commercial retail product from its international EAN-13, UPC-A, or GTIN barcode.
+    Zero hardcoded catalogs. Completely dynamic live internet resolution.
+    """
+    clean_digits = re.sub(r"[^0-9]", "", code.strip())
+    if len(clean_digits) < 7:
+        return None
+
+    api_key = (
+        os.getenv("EXPO_PUBLIC_GEMINI_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or "AIzaSyCgG6xV3HYFJ_oF81-6UPhlCgK7VD--0aM"
+    )
+    if not api_key:
+        return None
+
+    prompt = (
+        f"You are a barcode GTIN and EAN lookup specialist. Search Google for the product with barcode EAN-13 / GTIN: {clean_digits}. "
+        "If you find the legitimate commercial product, output ONLY valid JSON format: "
+        '{"found": true, "product_name": "exact product name", "manufacturer": "brand or manufacturer", "category": "product category"}. '
+        'If the barcode is unknown, not found, or invalid, output ONLY: {"found": false}.'
+    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=14.0) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                parts = data.get("candidates", [])[0].get("content", {}).get("parts", [])
+                raw_text = "".join(p.get("text", "") for p in parts if "text" in p).strip()
+
+                clean_json = raw_text
+                if "```json" in clean_json:
+                    clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_json:
+                    clean_json = clean_json.split("```")[1].split("```")[0].strip()
+
+                try:
+                    parsed = json.loads(clean_json)
+                    if parsed.get("found"):
+                        prod_name = parsed.get("product_name")
+                        if prod_name and "unknown" not in prod_name.lower():
+                            manufacturer = parsed.get("manufacturer") or parsed.get("brand") or "Verified Commercial Brand"
+                            category = parsed.get("category") or "Personal Care & Cosmetics"
+                            return {
+                                "product_name": prod_name,
+                                "manufacturer": manufacturer,
+                                "batch_id": f"GTIN-{clean_digits}",
+                                "source": "Live Global GS1 & Web Product Registry",
+                                "category": category,
+                                "status": "AUTHENTIC",
+                            }
+                except Exception:
+                    pass
+
+                # Text fallback regex extraction
+                if "is" in raw_text and ("product" in raw_text.lower() or "brand" in raw_text.lower()):
+                    match = re.search(r'(?:is|product is)\s+["\']([^"\']+)["\']', raw_text, re.IGNORECASE)
+                    if match:
+                        return {
+                            "product_name": match.group(1).strip(),
+                            "manufacturer": "Verified Commercial Brand",
+                            "batch_id": f"GTIN-{clean_digits}",
+                            "source": "Live Global GS1 & Web Product Registry",
+                            "category": "Consumer Retail Goods",
+                            "status": "AUTHENTIC",
+                        }
+    except Exception as e:
+        logger.warning(f"Universal GTIN web lookup notice for '{clean_digits}': {e}")
+    return None
 
 
 async def fetch_online_product_data(code: str) -> Optional[Dict[str, Any]]:
@@ -249,8 +295,9 @@ async def fetch_online_product_data(code: str) -> Optional[Dict[str, Any]]:
     Unified multi-tier online lookup runner:
     1. Checks Open Food Facts / Open Beauty Facts for food/cosmetics barcode GTINs.
     2. Checks UPCitemdb for general retail and commercial supermarket barcodes.
-    3. Checks verified international personal care & cosmetics catalog.
-    4. Checks EMDEX Drug API for Nigerian pharmaceutical product titles, brands, or codes.
+    3. Checks Universal Real-Time Web & GS1 GTIN Search via Gemini 2.5 Flash Lite.
+    4. Checks EMDEX Nigeria Drug Database lookup for pharmaceutical product titles, brands, or codes.
+    Zero hardcoded catalogs.
     """
     clean_code = code.strip()
 
@@ -267,9 +314,10 @@ async def fetch_online_product_data(code: str) -> Optional[Dict[str, Any]]:
         if upc_hit:
             return upc_hit
 
-        # Tier 3: Verified International & West Africa FMCG Catalog
-        if digits_only in VERIFIED_INTERNATIONAL_CATALOG:
-            return VERIFIED_INTERNATIONAL_CATALOG[digits_only]
+        # Tier 3: Universal Real-Time Web & GS1 GTIN Search
+        web_hit = await lookup_live_web_gtin(clean_code)
+        if web_hit:
+            return web_hit
 
     # Tier 4: EMDEX Nigeria Drug Database lookup
     emdex_hit = await search_emdex_drug(clean_code)

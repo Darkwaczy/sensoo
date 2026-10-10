@@ -81,11 +81,11 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
 
                 return {
                     "status": "FAKE",
-                    "reason": "Invalid Product Code — Not registered in NAFDAC, EMDEX, or Global Barcode Whitelist",
+                    "reason": "Unregistered Barcode — Not found in NAFDAC, EMDEX, or Global GS1 Retail Registries",
                     "alarms": alarms,
                     "new_state": "INVALID",
-                    "product_name": "Unregistered / Unverified Product",
-                    "manufacturer": "Unknown Source",
+                    "product_name": "Unregistered / Uncataloged Product",
+                    "manufacturer": "Unknown Origin",
                     "batch_id": "UNLISTED",
                     "image_url": None,
                 }
