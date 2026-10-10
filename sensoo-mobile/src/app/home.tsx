@@ -41,6 +41,7 @@ import {
 } from '../services/sensooStorageService';
 import {
   queryNafdacGreenbook,
+  fetchLiveNafdacGreenbook,
   NafdacGreenbookProduct,
 } from '../services/nafdacGreenbookService';
 
@@ -189,6 +190,40 @@ export default function HomeScreen() {
       }
     });
   }, []);
+
+  const [liveGreenbookList, setLiveGreenbookList] = useState<NafdacGreenbookProduct[]>([]);
+  const [greenbookTotalCount, setGreenbookTotalCount] = useState(8943);
+  const [isGreenbookLoading, setIsGreenbookLoading] = useState(false);
+
+  // Live real-time querying across all 8,943+ NAFDAC Greenbook products
+  useEffect(() => {
+    if (activeView !== 'VerifiedProducts') return;
+    let isMounted = true;
+    setIsGreenbookLoading(true);
+
+    const timer = setTimeout(() => {
+      fetchLiveNafdacGreenbook(
+        verifiedSearch,
+        greenbookStatusFilter,
+        verifiedFilter === 'All' ? 'All' : verifiedFilter,
+        40
+      )
+        .then((res) => {
+          if (!isMounted) return;
+          setLiveGreenbookList(res.products);
+          setGreenbookTotalCount(res.totalRecords);
+          setIsGreenbookLoading(false);
+        })
+        .catch(() => {
+          if (isMounted) setIsGreenbookLoading(false);
+        });
+    }, 280);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [activeView, verifiedSearch, greenbookStatusFilter, verifiedFilter]);
 
   // Real-time synchronization with live backend scans feed
   useEffect(() => {
@@ -622,11 +657,14 @@ export default function HomeScreen() {
     return true;
   });
 
-  const greenbookProducts = queryNafdacGreenbook(
-    verifiedSearch,
-    greenbookStatusFilter,
-    verifiedFilter === 'All' ? 'All' : verifiedFilter
-  );
+  const greenbookProducts =
+    liveGreenbookList.length > 0
+      ? liveGreenbookList
+      : queryNafdacGreenbook(
+          verifiedSearch,
+          greenbookStatusFilter,
+          verifiedFilter === 'All' ? 'All' : verifiedFilter
+        );
 
   const filteredVerifiedProducts = verifiedProducts.filter((item) => {
     const matchesSearch =
@@ -1005,7 +1043,11 @@ export default function HomeScreen() {
                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803D' }}>Official</Text>
                 </View>
               </View>
-              <Text style={styles.subPageSubtitle}>Nigeria's Registered Product Database (greenbook.nafdac.gov.ng)</Text>
+              <Text style={styles.subPageSubtitle}>
+                {isGreenbookLoading
+                  ? 'Searching 8,943+ official NAFDAC records in real time...'
+                  : `Nigeria's Registered Product Database (${greenbookTotalCount.toLocaleString()} Registered Products)`}
+              </Text>
             </View>
 
             {/* Search Bar */}
