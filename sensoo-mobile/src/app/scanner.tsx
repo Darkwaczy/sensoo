@@ -34,11 +34,38 @@ export default function ScannerScreen() {
     }
   }, [permission, requestPermission]);
 
-  // Re-enable scanner whenever returning to this screen
+  // 2-3 Second "Hold Steady" Stabilization Ring State
+  const [stabilizingCode, setStabilizingCode] = useState<string | null>(null);
+  const [countdownRemaining, setCountdownRemaining] = useState<number>(2);
+  const [isLocked, setIsLocked] = useState(false);
+
+  const lockAnim = useRef(new Animated.Value(0)).current;
+  const lockTimerRef = useRef<any>(null);
+  const lockTimeoutRef = useRef<any>(null);
+  const resetTimerRef = useRef<any>(null);
+  const activeCodeRef = useRef<string | null>(null);
+  const isLockedRef = useRef(false);
+
+  const STABILIZATION_MS = 2200; // 2.2 seconds hold steady
+
+  const cancelStabilization = useCallback(() => {
+    if (isLockedRef.current) return;
+    if (lockTimeoutRef.current) clearTimeout(lockTimeoutRef.current);
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    lockAnim.setValue(0);
+    activeCodeRef.current = null;
+    setStabilizingCode(null);
+    setCountdownRemaining(2);
+  }, [lockAnim]);
+
+  // Reset scanner whenever returning to this screen
   useFocusEffect(
     useCallback(() => {
       setIsScanning(true);
-    }, [])
+      setIsLocked(false);
+      isLockedRef.current = false;
+      cancelStabilization();
+    }, [cancelStabilization])
   );
 
   // Animated sweeping laser beam
@@ -71,45 +98,78 @@ export default function ScannerScreen() {
     outputRange: [0, RETICLE_SIZE - 6],
   });
 
-  // Candidate buffer to prevent truncated partial barcode reads
-  const pendingShortCodeRef = useRef<{ code: string; timeout: any } | null>(null);
-
-  // Navigate to dedicated Checking / Verification screen with real code
+  // Navigate to dedicated Checking / Verification screen with real confirmed code
   const navigateToChecking = (codeToVerify: string) => {
-    if (pendingShortCodeRef.current) {
-      clearTimeout(pendingShortCodeRef.current.timeout);
-      pendingShortCodeRef.current = null;
-    }
     setIsScanning(false);
+    setIsLocked(true);
+    isLockedRef.current = true;
+    if (lockTimeoutRef.current) clearTimeout(lockTimeoutRef.current);
+    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+
     router.push({
       pathname: '/checking',
       params: { code: codeToVerify, origin: params.origin },
     });
   };
 
-  const handleBarcodeScanned = (result: { data: string; type: string }) => {
-    if (!isScanning) return;
-    const clean = (result.data || '').trim();
-    if (!clean) return;
+  const startStabilization = (code: string) => {
+    if (isLockedRef.current) return;
 
-    const digitsOnly = clean.replace(/[^0-9]/g, '');
-
-    // Standard retail barcodes (UPC-A: 12 digits, EAN-13: 13 digits, Code-128)
-    if (digitsOnly.length >= 12 || clean.length >= 12) {
-      navigateToChecking(clean);
+    // If already stabilizing, update code if the new read is longer (e.g. 13 digits vs 12 digits)
+    if (activeCodeRef.current) {
+      if (code.length > activeCodeRef.current.length) {
+        activeCodeRef.current = code;
+        setStabilizingCode(code);
+      }
       return;
     }
 
-    // If an 8-11 digit code arrives (possible partial slice of a 12-digit UPC),
-    // debounce for 350ms to allow the camera to capture the full 12/13 digits
-    if (!pendingShortCodeRef.current) {
-      const timeout = setTimeout(() => {
-        if (isScanning) {
-          navigateToChecking(clean);
-        }
+    activeCodeRef.current = code;
+    setStabilizingCode(code);
+    setCountdownRemaining(2);
+
+    lockAnim.setValue(0);
+    Animated.timing(lockAnim, {
+      toValue: 1,
+      duration: STABILIZATION_MS,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+
+    // 1-second interval update
+    lockTimerRef.current = setTimeout(() => {
+      setCountdownRemaining(1);
+    }, 1100);
+
+    // Lock-in completion
+    lockTimeoutRef.current = setTimeout(() => {
+      setIsLocked(true);
+      isLockedRef.current = true;
+      setCountdownRemaining(0);
+      const codeToCommit = activeCodeRef.current || code;
+      setTimeout(() => {
+        navigateToChecking(codeToCommit);
       }, 350);
-      pendingShortCodeRef.current = { code: clean, timeout };
+    }, STABILIZATION_MS);
+  };
+
+  const handleBarcodeScanned = (result: { data: string; type: string }) => {
+    if (!isScanning || isLockedRef.current) return;
+    const clean = (result.data || '').trim();
+    if (!clean) return;
+
+    // Postpone decay as long as barcode is actively visible
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
     }
+
+    resetTimerRef.current = setTimeout(() => {
+      cancelStabilization();
+    }, 900);
+
+    startStabilization(clean);
   };
 
   const handleRequestPermission = async () => {
@@ -202,35 +262,115 @@ export default function ScannerScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Center Scanner Viewfinder (Purely visual overlay, never intercepts touches) */}
+      {/* Center Scanner Viewfinder with Stabilization Ring */}
       {permission?.granted && (
-        <View style={styles.viewfinderCenter} pointerEvents="none">
-          <View style={styles.reticleBox}>
-            {/* 4 Neon Green Corner Brackets */}
-            <View style={[styles.cornerBracket, styles.topLeft]} />
-            <View style={[styles.cornerBracket, styles.topRight]} />
-            <View style={[styles.cornerBracket, styles.bottomLeft]} />
-            <View style={[styles.cornerBracket, styles.bottomRight]} />
+        <View style={styles.viewfinderCenter} pointerEvents="box-none">
+          {/* Top Pill Badge: Status & Countdown */}
+          {stabilizingCode ? (
+            <Animated.View
+              style={[
+                styles.stabilizingPill,
+                isLocked ? styles.stabilizingPillLocked : styles.stabilizingPillActive,
+              ]}
+            >
+              <Text style={styles.stabilizingPillIcon}>
+                {isLocked ? '✓' : '🎯'}
+              </Text>
+              <Text style={styles.stabilizingPillText}>
+                {isLocked
+                  ? 'Barcode Confirmed & Locked!'
+                  : `Hold Steady... (${countdownRemaining}s)`}
+              </Text>
+            </Animated.View>
+          ) : (
+            <View style={styles.idlePillPlaceholder} />
+          )}
 
-            {/* Sweeping Neon Green Laser Beam */}
-            {isScanning && (
+          {/* Reticle Box */}
+          <View style={[styles.reticleBox, stabilizingCode && styles.reticleBoxStabilizing]}>
+            {/* 4 Neon Green Corner Brackets */}
+            <View style={[styles.cornerBracket, styles.topLeft, stabilizingCode && styles.cornerStabilizing]} />
+            <View style={[styles.cornerBracket, styles.topRight, stabilizingCode && styles.cornerStabilizing]} />
+            <View style={[styles.cornerBracket, styles.bottomLeft, stabilizingCode && styles.cornerStabilizing]} />
+            <View style={[styles.cornerBracket, styles.bottomRight, stabilizingCode && styles.cornerStabilizing]} />
+
+            {/* Glowing Border Pulse when stabilizing */}
+            {stabilizingCode && (
+              <Animated.View
+                style={[
+                  styles.stabilizingBorderPulse,
+                  {
+                    opacity: lockAnim.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [0.5, 0.85, 1],
+                    }),
+                  },
+                ]}
+              />
+            )}
+
+            {/* Sweeping Neon Green Laser Beam (only when idle searching) */}
+            {isScanning && !stabilizingCode && (
               <Animated.View
                 style={[
                   styles.laserBeam,
-                  {
-                    transform: [{ translateY }],
-                  },
+                  { transform: [{ translateY }] },
                 ]}
               >
                 <View style={styles.laserLine} />
                 <View style={styles.laserGlow} />
               </Animated.View>
             )}
+
+            {/* Stabilization Progress Fill Track at bottom edge of reticle */}
+            {stabilizingCode && (
+              <View style={styles.progressTrack}>
+                <Animated.View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: lockAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0%', '100%'],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+            )}
           </View>
 
-          <Text style={styles.reticleHintText}>
-            Align {scanMode === 'barcode' ? 'barcode' : 'QR code'} inside the frame
-          </Text>
+          {/* Bottom Info: Detected Digits & Instant Action Buttons */}
+          {stabilizingCode ? (
+            <View style={styles.stabilizingBottomBlock}>
+              <View style={styles.detectedDigitsBadge}>
+                <Text style={styles.detectedDigitsLabel}>DETECTED DIGITS</Text>
+                <Text style={styles.detectedDigitsValue}>{stabilizingCode}</Text>
+              </View>
+
+              <View style={styles.actionButtonsRow}>
+                <TouchableOpacity
+                  style={styles.verifyNowBtn}
+                  activeOpacity={0.85}
+                  onPress={() => navigateToChecking(stabilizingCode)}
+                >
+                  <Text style={styles.verifyNowText}>⚡ Verify Now</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  activeOpacity={0.7}
+                  onPress={cancelStabilization}
+                >
+                  <Text style={styles.cancelBtnText}>✕ Reset</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.reticleHintText}>
+              Align {scanMode === 'barcode' ? 'barcode' : 'QR code'} inside the frame
+            </Text>
+          )}
         </View>
       )}
 
@@ -541,5 +681,139 @@ const styles = StyleSheet.create({
   },
   modeInactiveLabel: {
     color: 'rgba(255, 255, 255, 0.65)',
+  },
+
+  /* Stabilization UI Elements */
+  idlePillPlaceholder: {
+    height: 38,
+    marginBottom: 14,
+  },
+  stabilizingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  stabilizingPillActive: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+  },
+  stabilizingPillLocked: {
+    backgroundColor: '#065F46',
+    borderWidth: 1.5,
+    borderColor: '#34D399',
+  },
+  stabilizingPillIcon: {
+    fontSize: 16,
+    color: '#34D399',
+    fontWeight: '700',
+  },
+  stabilizingPillText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  reticleBoxStabilizing: {
+    shadowColor: '#10B981',
+    shadowOpacity: 0.8,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  cornerStabilizing: {
+    borderColor: '#34D399',
+    shadowColor: '#34D399',
+    shadowRadius: 14,
+  },
+  stabilizingBorderPulse: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+  },
+  progressTrack: {
+    position: 'absolute',
+    bottom: -6,
+    left: 10,
+    right: 10,
+    height: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 3,
+  },
+  stabilizingBottomBlock: {
+    marginTop: 18,
+    alignItems: 'center',
+    gap: 12,
+  },
+  detectedDigitsBadge: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  detectedDigitsLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  detectedDigitsValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#34D399',
+    letterSpacing: 1.5,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  verifyNowBtn: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#10B981',
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  verifyNowText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cancelBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  cancelBtnText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
