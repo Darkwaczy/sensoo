@@ -152,7 +152,7 @@ export default function ScanFailedScreen() {
 
             <TextInput
               style={styles.inputField}
-              placeholder="e.g. 5000158105224"
+              placeholder="e.g. 6971764150130"
               placeholderTextColor="#94A3B8"
               value={manualCode}
               onChangeText={setManualCode}

@@ -22,6 +22,7 @@ export default function ReportDetailsScreen() {
     name?: string;
     status?: string;
     date?: string;
+    image?: string;
   }>();
 
   const productName = params.name || 'Reported Product';
@@ -75,10 +76,8 @@ export default function ReportDetailsScreen() {
           <View style={styles.productThumbBox}>
             <Image
               source={
-                productName.includes('Panadol')
-                  ? require('../../assets/panadol_extra.png')
-                  : productName.includes('Dettol')
-                  ? require('../../assets/dettol_antiseptic.png')
+                params.image
+                  ? { uri: params.image }
                   : require('../../assets/barcode_icon.png')
               }
               style={styles.productThumb}

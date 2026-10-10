@@ -11,12 +11,19 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function RegionalInfoScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    name?: string;
+    code?: string;
+    imageUrl?: string;
+  }>();
+
+  const productName = params.name || (params.code ? `Product (${params.code})` : 'Diverted Product');
 
   return (
     <View style={styles.container}>
@@ -49,13 +56,17 @@ export default function RegionalInfoScreen() {
           </View>
           <View style={styles.productThumbWrapper}>
             <Image
-              source={require('../../assets/cerave_foaming.png')}
+              source={
+                params.imageUrl
+                  ? { uri: params.imageUrl }
+                  : require('../../assets/barcode_icon.png')
+              }
               style={styles.productThumb}
               resizeMode="contain"
             />
           </View>
           <View style={styles.productMeta}>
-            <Text style={styles.productName}>CeraVe Foaming Cleanser{'\n'}473ml</Text>
+            <Text style={styles.productName}>{productName}</Text>
             <View style={styles.statusPill}>
               <Text style={styles.statusPillIcon}>!</Text>
               <Text style={styles.statusPillText}>Wrong Region</Text>

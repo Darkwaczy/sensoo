@@ -89,8 +89,8 @@ export default function ReportProductScreen() {
             <View style={styles.productThumbWrapper}>
               <Image
                 source={
-                  productName.includes('Panadol')
-                    ? require('../../assets/panadol_extra.png')
+                  params.image
+                    ? { uri: params.image }
                     : require('../../assets/barcode_icon.png')
                 }
                 style={styles.productThumb}
@@ -100,7 +100,7 @@ export default function ReportProductScreen() {
             <View style={styles.productMeta}>
               <Text style={styles.productName}>{productName}</Text>
               <Text style={styles.productScannedDate}>
-                Scanned on Aug 20, 2025, 10:42 AM
+                Scanned today, {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
           </View>

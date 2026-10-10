@@ -19,6 +19,7 @@ export default function SavedToHistoryScreen() {
   const params = useLocalSearchParams<{
     name?: string;
     code?: string;
+    imageUrl?: string;
   }>();
 
   const productName = params.name || (params.code ? `Product (${params.code})` : 'Verified Product');
@@ -58,8 +59,8 @@ export default function SavedToHistoryScreen() {
           <View style={styles.productThumbContainer}>
             <Image
               source={
-                productName.includes('Panadol')
-                  ? require('../../assets/panadol_extra.png')
+                params.imageUrl
+                  ? { uri: params.imageUrl }
                   : require('../../assets/barcode_icon.png')
               }
               style={styles.productThumb}

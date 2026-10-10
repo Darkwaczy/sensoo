@@ -73,22 +73,20 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     titleColor: '#D97706',
     primaryButtonColor: '#D97706',
     heroImage: require('../../assets/icons/hero_purchased.png'),
-    productImage: require('../../assets/panadol_extra.png'),
-    productName: 'Panadol Extra\nTablets 500mg',
-    productCategory: 'Analgesic',
+    productImage: require('../../assets/barcode_icon.png'),
+    productName: 'Scanned Item',
+    productCategory: 'Security Flag',
     statusBadgeText: 'Already Purchased',
     statusBadgeBg: '#FEF3C7',
     statusBadgeColor: '#D97706',
     details: [
-      { label: 'Brand', value: 'Panadol' },
-      { label: 'Manufacturer', value: 'Haleon' },
-      { label: 'Barcode', value: '5000158105224' },
-      { label: 'Batch Number', value: 'A3F7K2' },
-      { label: 'Expiry Date', value: 'Dec 2026' },
+      { label: 'Security State', value: 'Already Purchased / Retired' },
+      { label: 'Detection', value: 'Clone / Recycling Alert' },
+      { label: 'Registry Telemetry', value: 'Multiple Scans Recorded' },
     ],
     actionSecondaryText: 'View Scan History',
     actionSecondaryIcon: '🔖',
-    serialNumber: undefined
+    serialNumber: undefined,
   },
   IMPOSSIBLE_TRAVEL: {
     type: 'IMPOSSIBLE_TRAVEL',
@@ -97,22 +95,20 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     titleColor: '#DC2626',
     primaryButtonColor: '#DC2626',
     heroImage: require('../../assets/icons/hero_travel.png'),
-    productImage: require('../../assets/dettol_antiseptic.png'),
-    productName: 'Dettol Antiseptic\nLiquid 250ml',
-    productCategory: 'Antiseptic',
+    productImage: require('../../assets/barcode_icon.png'),
+    productName: 'Scanned Item',
+    productCategory: 'Security Flag',
     statusBadgeText: 'Impossible Travel',
     statusBadgeBg: '#FEE2E2',
     statusBadgeColor: '#DC2626',
     details: [
-      { label: 'Brand', value: 'Dettol' },
-      { label: 'Manufacturer', value: 'Reckitt Benckiser' },
-      { label: 'Barcode', value: '5000158067447' },
-      { label: 'Batch Number', value: 'BATCH-2026-D3' },
-      { label: 'Velocity Anomaly', value: '5,333 km/h' },
+      { label: 'Security State', value: 'Velocity Anomaly Detected' },
+      { label: 'Telemetry Speed', value: 'Impossible Speed (> 900 km/h)' },
+      { label: 'Detection', value: 'Simultaneous Scan Anomaly' },
     ],
     actionSecondaryText: 'Report Product',
     actionSecondaryIcon: '⚠️',
-    serialNumber: undefined
+    serialNumber: undefined,
   },
   AUTHENTIC: {
     type: 'AUTHENTIC',
@@ -121,24 +117,19 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     titleColor: '#059669',
     primaryButtonColor: '#059669',
     heroImage: require('../../assets/icons/hero_authentic.png'),
-    productImage: require('../../assets/panadol_extra.png'),
-    productName: 'Panadol Extra\nTablets 500mg',
-    productCategory: 'Medicine',
+    productImage: require('../../assets/barcode_icon.png'),
+    productName: 'Verified Product',
+    productCategory: 'Verified Item',
     statusBadgeText: 'Verified by Manufacturer',
     statusBadgeBg: '#DCFCE7',
     statusBadgeColor: '#059669',
     details: [
-      { label: 'Brand', value: 'Panadol' },
-      { label: 'Manufacturer', value: 'Haleon' },
-      { label: 'Barcode', value: '5000158105224' },
-      { label: 'Batch Number', value: 'A3F7K2' },
-      { label: 'Expiry Date', value: 'Dec 2026' },
-      { label: 'Category', value: 'Medicine' },
-      { label: 'Country of Origin', value: 'United Kingdom' },
+      { label: 'Registry Status', value: 'Confirmed in Official Database' },
+      { label: 'Integrity Check', value: 'Packaging & Signature Verified' },
     ],
     actionSecondaryText: 'Save to History',
     actionSecondaryIcon: '🔖',
-    serialNumber: undefined
+    serialNumber: undefined,
   },
   WRONG_REGION: {
     type: 'WRONG_REGION',
@@ -147,24 +138,19 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
     titleColor: '#3B82F6',
     primaryButtonColor: '#D97706',
     heroImage: require('../../assets/icons/hero_region.png'),
-    productImage: require('../../assets/cerave_foaming.png'),
-    productName: 'CeraVe Foaming Cleanser\n473ml',
-    productCategory: 'Skincare',
+    productImage: require('../../assets/barcode_icon.png'),
+    productName: 'Diverted Product',
+    productCategory: 'Regional Diversion',
     statusBadgeText: 'Wrong Region',
     statusBadgeBg: '#FEF3C7',
     statusBadgeColor: '#D97706',
     details: [
-      { label: 'Brand', value: 'CeraVe' },
-      { label: 'Manufacturer', value: "L'Oréal USA" },
-      { label: 'Barcode', value: '3606000537008' },
-      { label: 'Batch Number', value: '54T91L' },
-      { label: 'Expiry Date', value: 'Jan 2027' },
-      { label: 'Intended Region', value: 'United States' },
+      { label: 'Territory Status', value: 'Unauthorized Regional Diversion' },
       { label: 'Current Location', value: 'Nigeria' },
     ],
     actionSecondaryText: 'Learn More',
     actionSecondaryIcon: 'ℹ️',
-    serialNumber: undefined
+    serialNumber: undefined,
   },
 };
 
@@ -230,29 +216,35 @@ export default function ResultScreen() {
         pathname: '/report-product',
         params: {
           name: config.productName.replace('\n', ' '),
-          code: params.code || '8999990012345',
+          code: params.code || 'UNLISTED',
+          image: params.imageUrl,
         },
       });
     } else if (activeScenario === 'ALREADY_PURCHASED') {
       router.push({
         pathname: '/scan-history',
         params: {
-          code: params.code || '5000158105224',
+          code: params.code || 'UNLISTED',
+          name: config.productName.replace('\n', ' '),
+          imageUrl: params.imageUrl,
         },
       });
     } else if (activeScenario === 'WRONG_REGION') {
       router.push({
         pathname: '/regional-info',
         params: {
-          code: params.code || '3606000537008',
+          code: params.code || 'UNLISTED',
+          name: config.productName.replace('\n', ' '),
+          imageUrl: params.imageUrl,
         },
       });
     } else if (activeScenario === 'AUTHENTIC') {
       router.push({
         pathname: '/saved-to-history',
         params: {
-          name: config.productName,
-          code: params.code || '5000158105224',
+          name: config.productName.replace('\n', ' '),
+          code: params.code || 'UNLISTED',
+          imageUrl: params.imageUrl,
         },
       });
     }
@@ -507,7 +499,7 @@ export default function ResultScreen() {
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
                   <Text style={styles.timelineLoc}>Lagos, Nigeria</Text>
-                  <Text style={styles.timelineTime}>Aug 12, 2025, 10:24 AM</Text>
+                  <Text style={styles.timelineTime}>Today, {nowTime}</Text>
                 </View>
               </View>
 
@@ -517,7 +509,7 @@ export default function ResultScreen() {
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
                   <Text style={styles.timelineLoc}>Port Harcourt, Nigeria</Text>
-                  <Text style={styles.timelineTime}>Aug 16, 2025, 2:15 PM</Text>
+                  <Text style={styles.timelineTime}>Earlier today</Text>
                 </View>
               </View>
 
@@ -527,7 +519,7 @@ export default function ResultScreen() {
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
                   <Text style={styles.timelineLoc}>Abuja, Nigeria</Text>
-                  <Text style={styles.timelineTime}>Aug 18, 2025, 6:03 PM</Text>
+                  <Text style={styles.timelineTime}>Previous scan</Text>
                 </View>
               </View>
 

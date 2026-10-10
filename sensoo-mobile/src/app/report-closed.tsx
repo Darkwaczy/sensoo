@@ -16,8 +16,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ReportClosedScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ name?: string }>();
-  const productName = params.name || 'Maybelline Fit Me\nFoundation 30ml';
+  const params = useLocalSearchParams<{ name?: string; image?: string }>();
+  const productName = params.name || 'Reported Product';
 
   return (
     <View style={styles.container}>
@@ -68,7 +68,11 @@ export default function ReportClosedScreen() {
         <View style={styles.productCard}>
           <View style={styles.productThumbBox}>
             <Image
-              source={require('../../assets/cerave_foaming.png')}
+              source={
+                params.image
+                  ? { uri: params.image }
+                  : require('../../assets/barcode_icon.png')
+              }
               style={styles.productThumb}
               resizeMode="contain"
             />

@@ -55,6 +55,7 @@ export interface NotificationItem {
 const INITIAL_NOTIFICATIONS_DATA: NotificationItem[] = [];
 
 interface RecentScanItem {
+  [x: string]: string | undefined;
   id: string;
   name: string;
   image: any;
@@ -498,10 +499,11 @@ export default function HomeScreen() {
         role: (m.sender === 'agent' ? 'model' : 'user') as 'model' | 'user',
         content: m.text,
       }));
+      const latestItem = recentScans.length > 0 ? recentScans[0] : null;
       const res = await sendAgentMessage(q, history, {
-        productName: 'Panadol Extra Tablets 500mg',
-        scannedCode: 'SNS-MED-8832',
-        scenario: 'AUTHENTIC',
+        productName: latestItem ? latestItem.name.replace('\n', ' ') : undefined,
+        scannedCode: latestItem ? latestItem.barcode : undefined,
+        scenario: latestItem ? (latestItem.scenario || 'AUTHENTIC') : undefined,
         userLocation: 'Lagos, Nigeria',
       });
       setAgentChat((prev) => [...prev, { sender: 'agent', text: res.reply }]);
@@ -1894,7 +1896,7 @@ export default function HomeScreen() {
               contentContainerStyle={styles.agentSuggestionsRow}
             >
               {[
-                'Is Panadol Extra safe to buy?',
+                'How to verify authentic medicine?',
                 'Find nearby clinics in Lagos',
                 'How to spot fake cosmetics?',
                 'Report a suspicious pharmacy',

@@ -10,45 +10,54 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const TIMELINE_DATA = [
-  {
-    id: 't1',
-    time: 'Today, 10:24 AM',
-    location: 'Lagos, Nigeria',
-    status: 'Scanned',
-  },
-  {
-    id: 't2',
-    time: 'Aug 18, 2025, 2:15 PM',
-    location: 'Port Harcourt, Nigeria',
-    status: 'Scanned',
-  },
-  {
-    id: 't3',
-    time: 'Aug 12, 2025, 10:24 AM',
-    location: 'Lagos, Nigeria',
-    status: 'Scanned',
-  },
-  {
-    id: 't4',
-    time: 'Aug 5, 2025, 6:03 PM',
-    location: 'Abuja, Nigeria',
-    status: 'Scanned',
-  },
-  {
-    id: 't5',
-    time: 'Jul 28, 2025, 9:41 AM',
-    location: 'Enugu, Nigeria',
-    status: 'Scanned',
-  },
-];
-
 export default function ScanHistoryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    code?: string;
+    name?: string;
+    imageUrl?: string;
+  }>();
+
+  const productName = params.name || (params.code ? `Product (${params.code})` : 'Scanned Product');
+  const barcode = params.code || 'UNLISTED';
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const timelineData = [
+    {
+      id: 't1',
+      time: `Today, ${now}`,
+      location: 'Lagos, Nigeria',
+      status: 'Scanned',
+    },
+    {
+      id: 't2',
+      time: 'Earlier today',
+      location: 'Port Harcourt, Nigeria',
+      status: 'Scanned',
+    },
+    {
+      id: 't3',
+      time: 'Yesterday',
+      location: 'Lagos, Nigeria',
+      status: 'Scanned',
+    },
+    {
+      id: 't4',
+      time: '3 days ago',
+      location: 'Abuja, Nigeria',
+      status: 'Scanned',
+    },
+    {
+      id: 't5',
+      time: 'Last week',
+      location: 'Enugu, Nigeria',
+      status: 'Scanned',
+    },
+  ];
 
   return (
     <View style={styles.container}>
@@ -78,17 +87,21 @@ export default function ScanHistoryScreen() {
         <View style={styles.productCard}>
           <View style={styles.productThumbWrapper}>
             <Image
-              source={require('../../assets/panadol_extra.png')}
+              source={
+                params.imageUrl
+                  ? { uri: params.imageUrl }
+                  : require('../../assets/barcode_icon.png')
+              }
               style={styles.productThumb}
               resizeMode="contain"
             />
           </View>
           <View style={styles.productMeta}>
-            <Text style={styles.productName}>Panadol Extra{'\n'}Tablets 500mg</Text>
-            <Text style={styles.productBarcode}>Barcode: 5000158105224</Text>
+            <Text style={styles.productName}>{productName}</Text>
+            <Text style={styles.productBarcode}>Barcode: {barcode}</Text>
             <View style={styles.scansBadge}>
               <Text style={styles.scansBadgeIcon}>✓</Text>
-              <Text style={styles.scansBadgeText}>5 scans detected</Text>
+              <Text style={styles.scansBadgeText}>Multiple scans detected</Text>
             </View>
           </View>
         </View>
@@ -101,8 +114,8 @@ export default function ScanHistoryScreen() {
           </Text>
 
           <View style={styles.timelineList}>
-            {TIMELINE_DATA.map((item, index) => {
-              const isLast = index === TIMELINE_DATA.length - 1;
+            {timelineData.map((item, index) => {
+              const isLast = index === timelineData.length - 1;
               return (
                 <View key={item.id} style={styles.timelineRow}>
                   {/* Left Column: Dot & Connecting Line */}
