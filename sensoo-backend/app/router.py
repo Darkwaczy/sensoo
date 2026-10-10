@@ -87,6 +87,8 @@ def get_feed(
 
 
 @router.delete("/feed")
+@router.post("/feed/clear")
+@router.get("/feed/clear")
 def clear_feed(
     session: Session = Depends(get_session),
 ) -> Any:

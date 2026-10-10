@@ -9,46 +9,13 @@ from app.router import router
 
 
 def seed_demo_products() -> None:
-    demo_products = [
-        ProductCode(
-            code="UNL-9X4-B2P",
-            product_name="Dove Body Wash 250ml",
-            manufacturer="Unilever",
-            batch_id="BATCH-9X4",
-            region="GLOBAL",
-            state="IN_STOCK",
-        ),
-        ProductCode(
-            code="UNL-CLONE-01",
-            product_name="Panadol Extra",
-            manufacturer="GSK",
-            batch_id="BATCH-CLN",
-            region="GLOBAL",
-            state="PURCHASED_RETIRED",
-        ),
-        ProductCode(
-            code="UNL-FAST-99",
-            product_name="Dettol",
-            manufacturer="Reckitt",
-            batch_id="BATCH-F99",
-            region="GLOBAL",
-            state="IN_STOCK",
-        ),
-    ]
-    with Session(engine) as session:
-        for product in demo_products:
-            existing = session.exec(
-                select(ProductCode).where(ProductCode.code == product.code)
-            ).first()
-            if not existing:
-                session.add(product)
-        session.commit()
+    # No hardcoded demo products. All products are verified dynamically via external registries or registered by authorized admins.
+    pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    seed_demo_products()
     yield
 
 
