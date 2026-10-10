@@ -3,7 +3,7 @@ import { AppState, AppStateStatus } from 'react-native';
 const RENDER_HEALTH_URL = 'https://sensoo-app-final-2.onrender.com/api/v1/health';
 const PING_INTERVAL_MS = 8 * 60 * 1000; // 8 minutes (Render sleeps after 15 minutes of inactivity)
 
-let keepAliveTimer: NodeJS.Timeout | null = null;
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 let isStarted = false;
 
 async function pingRender(): Promise<void> {
