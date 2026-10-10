@@ -386,3 +386,16 @@ export async function checkBackendHealth(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Clears stale telemetry records from live backend feed
+ */
+export async function clearLiveFeed(): Promise<boolean> {
+  try {
+    const res = await fetch(`${SENSOO_API_BASE_URL}/feed`, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+

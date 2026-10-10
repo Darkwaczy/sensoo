@@ -86,6 +86,16 @@ def get_feed(
     return feed_items
 
 
+@router.delete("/feed")
+def clear_feed(
+    session: Session = Depends(get_session),
+) -> Any:
+    from sqlmodel import delete
+    session.exec(delete(ScanTelemetryRecord))
+    session.commit()
+    return {"status": "cleared", "message": "Telemetry feed wiped successfully"}
+
+
 @router.get("/health")
 def health_check() -> Any:
     return {"status": "healthy", "service": "sensoo-backend"}

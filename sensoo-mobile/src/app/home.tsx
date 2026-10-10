@@ -140,14 +140,26 @@ export default function HomeScreen() {
     const syncLiveFeed = async () => {
       try {
         const feed = await fetchLiveFeed(30);
-        if (!isMounted || !feed || !Array.isArray(feed) || feed.length === 0) return;
+        if (!isMounted || !feed || !Array.isArray(feed)) return;
+
+        // Filter out legacy unparsed dummy scans from earlier test runs
+        const validFeed = feed.filter(
+          (item) => item.product_name && item.product_name !== 'None' && item.product_name !== 'Unknown'
+        );
+
+        if (validFeed.length === 0) {
+          setRecentScans([]);
+          setVerifiedProducts([]);
+          setAlerts([]);
+          return;
+        }
 
         const liveRecent: RecentScanItem[] = [];
         const liveVerified: VerifiedProductItem[] = [];
         const liveAlerts: AlertItem[] = [];
         const liveNotifs: NotificationItem[] = [];
 
-        feed.forEach((item, index) => {
+        validFeed.forEach((item, index) => {
           const rawAlarms = item.alarms || [];
           const alarmsLower = rawAlarms.map((a: string) => String(a).toLowerCase());
           const isClean = rawAlarms.length === 0;
@@ -185,7 +197,7 @@ export default function HomeScreen() {
 
           const prodImage = item.image_url
             ? { uri: item.image_url }
-            : require('../../assets/dove_body_wash.png');
+            : require('../../assets/barcode_icon.png');
 
           const recentEntry: RecentScanItem = {
             id: `feed-recent-${item.timestamp || index}-${index}`,
