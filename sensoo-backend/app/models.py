@@ -22,6 +22,10 @@ class ScanTelemetryRecord(ModelBase, table=True):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     alarms: str = Field(default="[]")
     device_id: str = Field(default="UNKNOWN")
+    product_name: Optional[str] = Field(default=None)
+    manufacturer: Optional[str] = Field(default=None)
+    status: Optional[str] = Field(default=None)
+    image_url: Optional[str] = Field(default=None)
 
 
 class ProductCodeCreate(BaseModel):
@@ -59,6 +63,7 @@ class ScanResponse(BaseModel):
     product_name: str
     manufacturer: str
     batch_id: str
+    image_url: Optional[str] = None
 
 
 class FeedItemResponse(BaseModel):
@@ -70,6 +75,10 @@ class FeedItemResponse(BaseModel):
     timestamp: datetime
     alarms: List[str]
     device_id: str
+    product_name: Optional[str] = None
+    manufacturer: Optional[str] = None
+    status: Optional[str] = None
+    image_url: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

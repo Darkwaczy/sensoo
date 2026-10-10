@@ -20,13 +20,12 @@ router.include_router(ai_router)
 verification_action = VerificationAction()
 
 
-
 @router.post("/scan", response_model=ScanResponse)
-def scan_product(
+async def scan_product(
     scan_data: ScanRequest,
     session: Session = Depends(get_session),
 ) -> Any:
-    return verification_action.verify_and_record_scan(session, scan_data)
+    return await verification_action.verify_and_record_scan(session, scan_data)
 
 
 @router.post("/register", response_model=ProductCode)
@@ -65,6 +64,8 @@ def get_feed(
         except Exception:
             alarms_list = [r.alarms] if r.alarms else []
 
+        computed_status = r.status or ("FAKE" if alarms_list else "AUTHENTIC")
+
         feed_items.append(
             FeedItemResponse(
                 id=r.id,
@@ -75,6 +76,10 @@ def get_feed(
                 timestamp=r.timestamp,
                 alarms=alarms_list,
                 device_id=r.device_id,
+                product_name=r.product_name,
+                manufacturer=r.manufacturer,
+                status=computed_status,
+                image_url=r.image_url,
                 created_at=r.created_at,
             )
         )

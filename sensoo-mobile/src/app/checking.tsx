@@ -82,129 +82,28 @@ export default function CheckingScreen() {
     };
   }, [ringRotateAnim, miniSpinAnim]);
 
-  // Sequential progression through the 4 verification checklist steps
+  // Sequential progression through verification steps with live backend data
   useEffect(() => {
-    // Determine the verdict based on Sensoo Engine 4 fraud rules
+    let isMounted = true;
     const now = new Date().toLocaleTimeString();
-    let computedVerdict: VerificationVerdict;
 
-    if (scannedCode.includes('FAKE') || scannedCode === 'SNS-FAKE-0000') {
-      computedVerdict = {
-        code: scannedCode,
-        name: 'Unverified Suspicious Product',
-        brand: 'Unknown Origin',
-        batch: 'UNKNOWN-BATCH',
-        status: 'FAKE',
-        title: '🚨 Counterfeit Detected',
-        description:
-          'Alarm 1: Code does not exist in authorized manufacturer whitelist database. Do not purchase or consume.',
-        region: 'Lagos, Nigeria',
-        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Normal)', time: now },
-      };
-    } else if (scannedCode.includes('8832') || scannedCode === 'SNS-MED-8832') {
-      computedVerdict = {
-        code: scannedCode,
-        name: 'Paracetamol 500mg Extra',
-        brand: 'GSK Consumer Health',
-        batch: 'BATCH-2026-B4',
-        status: 'ALREADY_PURCHASED',
-        title: '⚠️ Clone / Reuse Detected',
-        description:
-          'Alarm 2: Code exists in registry, but lifecycle state is already marked PURCHASED. High probability of recycled packaging.',
-        region: 'Abuja, Nigeria',
-        telemetry: { lat: 9.0765, lng: 7.3986, velocity: '0 km/h (Normal)', time: now },
-      };
-    } else if (scannedCode.includes('1099') || scannedCode === 'SNS-BABY-1099') {
-      computedVerdict = {
-        code: scannedCode,
-        name: 'Infant Formula Powder 400g',
-        brand: 'NutriCare Global',
-        batch: 'BATCH-2026-N2',
-        status: 'WRONG_REGION',
-        title: '⚠️ Supply Chain Diversion',
-        description:
-          'Alarm 4: Scan detected in Lagos, but manufacturer authorized delivery territory is Kano. Unauthorized distribution route.',
-        region: 'Lagos (Authorized: Kano)',
-        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Normal)', time: now },
-      };
-    } else if (scannedCode.includes('PHYSICS') || scannedCode.includes('SPEED')) {
-      computedVerdict = {
-        code: scannedCode,
-        name: 'Anti-Malaria ACT Artemether',
-        brand: 'Novartis Pharma',
-        batch: 'BATCH-2026-ACT9',
-        status: 'IMPOSSIBLE_PHYSICS',
-        title: '🚨 Geo-Velocity Anomaly',
-        description:
-          'Alarm 3: Code scanned concurrently in Lagos and London within 12 minutes (Velocity: 2,850 km/h > 900 km/h limit). Multiple physical clones detected.',
-        region: 'London / Lagos (Concurrent)',
-        telemetry: { lat: 51.5074, lng: -0.1278, velocity: '2,850 km/h (Impossible)', time: now },
-      };
-    } else if (
-      scannedCode.includes('6971764150130') ||
-      scannedCode.includes('DRL-1431') ||
-      scannedCode.includes('150130') ||
-      scannedCode.includes('RASHEL')
-    ) {
-      computedVerdict = {
-        code: scannedCode,
-        name: 'Dr. Rashel Face Care 50ml',
-        brand: 'Yiwu Rashel Trading Co., Ltd',
-        batch: 'BATCH-DRL-1431',
-        status: 'GENUINE',
-        title: '✓ Authentic Product Verified',
-        description:
-          'Verified by Manufacturer. Registered in national trade database, active batch, and authorized for distribution.',
-        region: 'Lagos, Nigeria',
-        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Normal Physics)', time: now },
-      };
-    } else {
-      // Default: Genuine Verified product
-      computedVerdict = {
-        code: scannedCode,
-        name: 'CeraVe Moisturizing Lotion 8 fl oz',
-        brand: "L'Oréal Dermatological",
-        batch: 'BATCH-2026-CV40',
-        status: 'GENUINE',
-        title: '✓ Authentic Product Verified',
-        description:
-          'Verified by Manufacturer. Batch active, shelf-ready, registered in national database, and within authorized geofenced territory.',
-        region: 'Lagos, Nigeria',
-        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Normal Physics)', time: now },
-      };
-    }
-
-    setVerdict(computedVerdict);
-
-    let apiResponse: ScanApiResponse | null = null;
-
-    // Trigger real backend verification in background with live API
-    verifyScanOnline(scannedCode)
-      .then((res) => {
-        apiResponse = res;
-      })
+    // Start live backend verification
+    const apiPromise = verifyScanOnline(scannedCode)
+      .then((res) => ({ ok: true, data: res as ScanApiResponse }))
       .catch((err) => {
-        console.warn('Using offline verification fallback:', err);
+        console.warn('Backend live verification error, using fallback:', err);
+        return { ok: false, data: null };
       });
 
-    // Timed step progression
-    const timer1 = setTimeout(() => {
-      setCurrentStep(2); // Step 1 done, Step 2 active
-    }, 800);
-
-    const timer2 = setTimeout(() => {
-      setCurrentStep(3); // Step 2 done, Step 3 active
-    }, 1700);
-
-    const timer3 = setTimeout(() => {
-      setCurrentStep(4); // Step 3 done, Step 4 active
-    }, 2500);
-
+    // Step progression animation timers
+    const timer1 = setTimeout(() => { if (isMounted) setCurrentStep(2); }, 600);
+    const timer2 = setTimeout(() => { if (isMounted) setCurrentStep(3); }, 1300);
+    const timer3 = setTimeout(() => { if (isMounted) setCurrentStep(4); }, 2000);
     const timer4 = setTimeout(() => {
-      setCurrentStep(5); // All steps done
+      if (!isMounted) return;
+      setCurrentStep(5);
       setIsFinished(true);
 
-      // Pulse animation when finished
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.08,
@@ -217,10 +116,25 @@ export default function CheckingScreen() {
           useNativeDriver: true,
         }),
       ]).start();
-    }, 3300);
+    }, 2600);
 
-    // Navigate directly to dedicated Result Scenario screen
-    const timer5 = setTimeout(() => {
+    // Coordinate minimum animation duration with real server response
+    const minAnimPromise = new Promise((resolve) => setTimeout(resolve, 2900));
+
+    Promise.all([apiPromise, minAnimPromise]).then(([apiResult]) => {
+      if (!isMounted) return;
+
+      const apiResponse = apiResult.ok && apiResult.data ? apiResult.data : null;
+
+      if (!apiResponse) {
+        // True live failure: Never fake or pretend mock products. Route to official unavailable screen.
+        router.replace({
+          pathname: '/verification-unavailable',
+          params: { code: scannedCode },
+        });
+        return;
+      }
+
       let scenario:
         | 'COUNTERFEIT'
         | 'ALREADY_PURCHASED'
@@ -228,63 +142,75 @@ export default function CheckingScreen() {
         | 'AUTHENTIC'
         | 'WRONG_REGION' = 'AUTHENTIC';
 
-      let resolvedName = computedVerdict.name;
-      let resolvedBrand = computedVerdict.brand;
-      let resolvedBatch = computedVerdict.batch;
-      let resolvedReason = computedVerdict.description;
+      let resolvedName = apiResponse.product_name || `Item ${scannedCode}`;
+      let resolvedBrand = apiResponse.manufacturer || 'Registry Whitelist';
+      let resolvedBatch = apiResponse.batch_id || 'VERIFIED-BATCH';
+      let resolvedReason = apiResponse.reason || 'Product verified in official registry.';
+      let verdictStatus: 'GENUINE' | 'FAKE' | 'ALREADY_PURCHASED' | 'IMPOSSIBLE_PHYSICS' | 'WRONG_REGION' = 'GENUINE';
 
-      if (apiResponse) {
-        if (apiResponse.status === 'AUTHENTIC') {
-          scenario = 'AUTHENTIC';
-        } else {
-          const alarms = apiResponse.alarms || [];
-          if (alarms.includes('ALREADY_PURCHASED')) {
-            scenario = 'ALREADY_PURCHASED';
-          } else if (
-            alarms.includes('IMPOSSIBLE_PHYSICS') ||
-            alarms.includes('IMPOSSIBLE_TRAVEL')
-          ) {
-            scenario = 'IMPOSSIBLE_TRAVEL';
-          } else if (alarms.includes('WRONG_REGION')) {
-            scenario = 'WRONG_REGION';
-          } else {
-            scenario = 'COUNTERFEIT';
-          }
-        }
-        if (apiResponse.product_name) resolvedName = apiResponse.product_name;
-        if (apiResponse.manufacturer) resolvedBrand = apiResponse.manufacturer;
-        if (apiResponse.batch_id) resolvedBatch = apiResponse.batch_id;
-        if (apiResponse.reason) resolvedReason = apiResponse.reason;
+      const alarms = (apiResponse.alarms || []).map((a) => a.toLowerCase());
+      const reasonLower = (apiResponse.reason || '').toLowerCase();
+
+      if (apiResponse.status === 'AUTHENTIC') {
+        scenario = 'AUTHENTIC';
+        verdictStatus = 'GENUINE';
+        resolvedName = apiResponse.product_name || `Authentic Product (${scannedCode})`;
+        resolvedBrand = apiResponse.manufacturer || 'Registered Whitelist';
+        resolvedBatch = apiResponse.batch_id || 'VERIFIED-BATCH';
+        resolvedReason = apiResponse.reason || 'Verified by Manufacturer. Registered in national database.';
       } else {
-        if (scannedCode.includes('FAKE') || scannedCode === 'SNS-FAKE-0000') {
-          scenario = 'COUNTERFEIT';
-        } else if (scannedCode.includes('8832') || scannedCode === 'SNS-MED-8832') {
+        // Real alarms classification directly from live backend
+        if (
+          alarms.some((a) => a.includes('purchased') || a.includes('clone') || a.includes('already')) ||
+          reasonLower.includes('already purchased') ||
+          reasonLower.includes('clone')
+        ) {
           scenario = 'ALREADY_PURCHASED';
+          verdictStatus = 'ALREADY_PURCHASED';
         } else if (
-          scannedCode.includes('SPEED') ||
-          scannedCode.includes('PHYSICS') ||
-          scannedCode === 'SNS-SPEED-9999'
+          alarms.some((a) => a.includes('physics') || a.includes('speed') || a.includes('travel') || a.includes('velocity')) ||
+          reasonLower.includes('physics') ||
+          reasonLower.includes('velocity') ||
+          reasonLower.includes('travel')
         ) {
           scenario = 'IMPOSSIBLE_TRAVEL';
-        } else if (scannedCode.includes('1099') || scannedCode === 'SNS-BABY-1099') {
+          verdictStatus = 'IMPOSSIBLE_PHYSICS';
+        } else if (
+          alarms.some((a) => a.includes('region')) ||
+          reasonLower.includes('region')
+        ) {
           scenario = 'WRONG_REGION';
+          verdictStatus = 'WRONG_REGION';
+        } else {
+          scenario = 'COUNTERFEIT';
+          verdictStatus = 'FAKE';
         }
+
+        const isUnknownProd = !apiResponse.product_name || apiResponse.product_name.toLowerCase().includes('unknown');
+        resolvedName = isUnknownProd ? `Unregistered Product (${scannedCode})` : apiResponse.product_name!;
+
+        const isUnknownMan = !apiResponse.manufacturer || apiResponse.manufacturer.toLowerCase().includes('unknown');
+        resolvedBrand = isUnknownMan ? 'Unregistered Origin' : apiResponse.manufacturer!;
+
+        const isUnknownBatch = !apiResponse.batch_id || apiResponse.batch_id.toLowerCase().includes('unknown');
+        resolvedBatch = isUnknownBatch ? 'UNLISTED' : apiResponse.batch_id!;
+
+        resolvedReason = apiResponse.reason || 'Barcode does not exist in authorized manufacturer whitelist database.';
       }
 
-      // Explicit override for registered Dr. Rashel physical product
-      if (
-        scannedCode.includes('6971764150130') ||
-        scannedCode.includes('DRL-1431') ||
-        scannedCode.includes('150130') ||
-        scannedCode.includes('RASHEL')
-      ) {
-        scenario = 'AUTHENTIC';
-        resolvedName = 'Dr. Rashel Face Care 50ml';
-        resolvedBrand = 'Yiwu Rashel Trading Co., Ltd';
-        resolvedBatch = 'BATCH-DRL-1431';
-        resolvedReason = 'Verified by Manufacturer. Registered in national trade database, active batch, and verified authentic.';
-      }
+      setVerdict({
+        code: scannedCode,
+        name: resolvedName,
+        brand: resolvedBrand,
+        batch: resolvedBatch,
+        status: verdictStatus,
+        title: scenario === 'AUTHENTIC' ? '✓ Authentic Product Verified' : `🚨 ${scenario.replace('_', ' ')}`,
+        description: resolvedReason,
+        region: 'Lagos, Nigeria',
+        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Live)', time: now },
+      });
 
+      // Navigate smoothly with real server parameters
       if (params.origin === 'chat') {
         router.replace({
           pathname: '/agent',
@@ -305,17 +231,18 @@ export default function CheckingScreen() {
             manufacturer: resolvedBrand,
             batchId: resolvedBatch,
             reason: resolvedReason,
+            imageUrl: apiResponse.image_url || '',
           },
         });
       }
-    }, 3600);
+    });
 
     return () => {
+      isMounted = false;
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
       clearTimeout(timer4);
-      clearTimeout(timer5);
     };
   }, [scannedCode, router]);
 

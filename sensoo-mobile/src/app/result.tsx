@@ -178,6 +178,7 @@ export default function ResultScreen() {
     manufacturer?: string;
     batchId?: string;
     reason?: string;
+    imageUrl?: string;
   }>();
 
   // Determine initial scenario from param or match from code
@@ -200,9 +201,10 @@ export default function ResultScreen() {
     ...baseConfig,
     subtitle: params.reason || baseConfig.subtitle,
     productName: params.productName || baseConfig.productName,
+    productImage: params.imageUrl ? { uri: params.imageUrl } : baseConfig.productImage,
     details: baseConfig.details.map((d) => {
-      if (d.label === 'Brand' && params.productName) {
-        return { ...d, value: params.productName.split(' ')[0] };
+      if (d.label === 'Brand' && (params.manufacturer || params.productName)) {
+        return { ...d, value: params.manufacturer || params.productName!.split(' ')[0] };
       }
       if (d.label === 'Manufacturer' && params.manufacturer) {
         return { ...d, value: params.manufacturer };

@@ -13,6 +13,7 @@ from app.models import (
     ScanResponse,
     ScanTelemetryRecord,
 )
+from app.online_db_service import fetch_online_product_data
 
 
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -32,7 +33,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCodeUpdate]):
-    def verify_and_record_scan(
+    async def verify_and_record_scan(
         self, session: Session, scan_data: ScanRequest
     ) -> dict[str, Any]:
         scan_time = scan_data.timestamp or datetime.now(timezone.utc)
@@ -40,21 +41,13 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
             scan_time = scan_time.replace(tzinfo=timezone.utc)
 
         alarms: List[str] = []
+        resolved_image: Optional[str] = None
 
-        # 1. Alarm: Invalid Code / Online DB Fallback Lookup
+        # 1. Alarm: Invalid Code / Online Dynamic Query (EMDEX + OpenFoodFacts)
         product = self.get_by_all(session, code=scan_data.code)
         if product is None:
-            # Query Online EMDEX & Global Barcode Registry API in real time
-            import asyncio
-            from app.online_db_service import fetch_online_product_data
-            try:
-                loop = asyncio.get_event_loop()
-                online_hit = loop.run_until_complete(fetch_online_product_data(scan_data.code))
-            except Exception:
-                try:
-                    online_hit = asyncio.run(fetch_online_product_data(scan_data.code))
-                except Exception:
-                    online_hit = None
+            # Query real online databases dynamically with zero pre-registration needed
+            online_hit = await fetch_online_product_data(scan_data.code)
 
             if online_hit:
                 product = ProductCode(
@@ -68,6 +61,7 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
                 session.add(product)
                 session.commit()
                 session.refresh(product)
+                resolved_image = online_hit.get("image_url")
             else:
                 alarms.append("Invalid Code")
                 telemetry = ScanTelemetryRecord(
@@ -78,21 +72,25 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
                     timestamp=scan_time,
                     alarms=json.dumps(alarms),
                     device_id=scan_data.device_id or "UNKNOWN",
+                    product_name="Unregistered / Unverified Product",
+                    manufacturer="Unknown Source",
+                    status="FAKE",
                 )
                 session.add(telemetry)
                 session.commit()
 
                 return {
                     "status": "FAKE",
-                    "reason": "Invalid Product Code — Not registered in NAFDAC / EMDEX Database",
+                    "reason": "Invalid Product Code — Not registered in NAFDAC, EMDEX, or Global Barcode Whitelist",
                     "alarms": alarms,
                     "new_state": "INVALID",
-                    "product_name": "Unknown Product",
-                    "manufacturer": "Unregistered / Unknown",
-                    "batch_id": "Unknown",
+                    "product_name": "Unregistered / Unverified Product",
+                    "manufacturer": "Unknown Source",
+                    "batch_id": "UNLISTED",
+                    "image_url": None,
                 }
 
-        # Product exists - check remaining 3 alarms
+        # Product exists / was dynamically resolved - check remaining 3 alarms
 
         # 2. Alarm: Already Purchased (clone detection)
         if product.state in ("PURCHASED_RETIRED", "PURCHASED", "RETIRED"):
@@ -137,12 +135,12 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
             new_state = product.state
         else:
             status = "AUTHENTIC"
-            reason = "Product verified successfully"
+            reason = "Product verified successfully in official database"
             product.state = "PURCHASED_RETIRED"
             new_state = "PURCHASED_RETIRED"
             session.add(product)
 
-        # Record scan telemetry
+        # Record scan telemetry with actual real product metadata
         telemetry = ScanTelemetryRecord(
             code=product.code,
             role=scan_data.role,
@@ -151,6 +149,10 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
             timestamp=scan_time,
             alarms=json.dumps(alarms),
             device_id=scan_data.device_id or "UNKNOWN",
+            product_name=product.product_name,
+            manufacturer=product.manufacturer,
+            status=status,
+            image_url=resolved_image,
         )
         session.add(telemetry)
         session.commit()
@@ -165,4 +167,5 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
             "product_name": product.product_name,
             "manufacturer": product.manufacturer,
             "batch_id": product.batch_id,
+            "image_url": resolved_image,
         }

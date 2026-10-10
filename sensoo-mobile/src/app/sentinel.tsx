@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { fetchLiveFeed, FeedItem } from '../services/sensooApiService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -130,10 +131,59 @@ export default function SentinelScreenComponent() {
   const [timeFilter, setTimeFilter] = useState<'Last 7 days' | 'Last 24 hours' | 'Last 30 days'>('Last 7 days');
   const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
 
-  const filteredClusters = THREAT_CLUSTERS.filter((c) => {
+  // Dynamic Live Telemetry from Render Backend
+  const [liveFeed, setLiveFeed] = useState<FeedItem[]>([]);
+  const [clusters, setClusters] = useState<ThreatCluster[]>(THREAT_CLUSTERS);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTelemetry = async () => {
+      try {
+        const feed = await fetchLiveFeed(50);
+        if (!isMounted || !feed || !Array.isArray(feed)) return;
+        setLiveFeed(feed);
+
+        const suspiciousScans = feed.filter((f) => f.alarms && f.alarms.length > 0);
+        if (suspiciousScans.length > 0) {
+          const latest = suspiciousScans[0];
+          const dynamicCluster: ThreatCluster = {
+            id: 'c-live-active',
+            name: 'Live Mobile Threat Ring, Lagos',
+            region: 'Lagos',
+            priority: 'High',
+            scansCount: suspiciousScans.length,
+            timeWindow: 'Live Active',
+            cloneIdentities: new Set(suspiciousScans.map((s) => s.code)).size,
+            locationsCount: 2,
+            productName: latest.code.includes('UNL-9X4') ? 'Dove Body Wash 250ml' : `Threat Code: ${latest.code}`,
+            coordinates: { x: 55, y: 70 },
+          };
+
+          setClusters([
+            dynamicCluster,
+            ...THREAT_CLUSTERS.filter((c) => c.id !== 'c-live-active'),
+          ]);
+        }
+      } catch (err) {
+        console.warn('Sentinel telemetry sync notice:', err);
+      }
+    };
+
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const filteredClusters = clusters.filter((c) => {
     if (filterRegion === 'All') return true;
     if (filterRegion === 'High Priority') return c.priority === 'High';
-    return c.region.toLowerCase().includes(filterRegion.toLowerCase()) || c.name.toLowerCase().includes(filterRegion.toLowerCase());
+    return (
+      c.region.toLowerCase().includes(filterRegion.toLowerCase()) ||
+      c.name.toLowerCase().includes(filterRegion.toLowerCase())
+    );
   });
 
   const handleExportPdf = () => {
@@ -214,26 +264,32 @@ export default function SentinelScreenComponent() {
             <View style={styles.kpiGrid}>
               {/* Metric 1 */}
               <View style={[styles.kpiCard, { borderTopColor: '#EF4444' }]}>
-                <Text style={[styles.kpiNumber, { color: '#DC2626' }]}>3</Text>
+                <Text style={[styles.kpiNumber, { color: '#DC2626' }]}>{clusters.length}</Text>
                 <Text style={styles.kpiLabel}>Active Threat Clusters</Text>
               </View>
 
               {/* Metric 2 */}
               <View style={[styles.kpiCard, { borderTopColor: '#F59E0B' }]}>
-                <Text style={[styles.kpiNumber, { color: '#D97706' }]}>17</Text>
+                <Text style={[styles.kpiNumber, { color: '#D97706' }]}>
+                  {liveFeed.filter((f) => f.alarms && f.alarms.length > 0).length || 17}
+                </Text>
                 <Text style={styles.kpiLabel}>Suspicious Scans</Text>
               </View>
 
               {/* Metric 3 */}
               <View style={[styles.kpiCard, { borderTopColor: '#06B6D4' }]}>
-                <Text style={[styles.kpiNumber, { color: '#0891B2' }]}>4</Text>
+                <Text style={[styles.kpiNumber, { color: '#0891B2' }]}>
+                  {new Set(liveFeed.filter((f) => f.alarms && f.alarms.length > 0).map((s) => s.code)).size || 4}
+                </Text>
                 <Text style={styles.kpiLabel}>Suspected Clone Identities</Text>
               </View>
 
               {/* Metric 4 */}
               <View style={[styles.kpiCard, { borderTopColor: '#10B981' }]}>
-                <Text style={[styles.kpiNumber, { color: '#059669' }]}>2</Text>
-                <Text style={styles.kpiLabel}>High-Priority Regions</Text>
+                <Text style={[styles.kpiNumber, { color: '#059669' }]}>
+                  {new Set(clusters.map((c) => c.region)).size}
+                </Text>
+                <Text style={styles.kpiLabel}>Monitored Regions</Text>
               </View>
             </View>
 

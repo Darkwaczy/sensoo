@@ -25,6 +25,7 @@ import {
   setAudioModeAsync,
 } from 'expo-audio';
 import { sendAgentMessage } from '../services/sensooAiService';
+import { fetchLiveFeed } from '../services/sensooApiService';
 import {
   getVoiceAssistantSettings,
   subscribeVoiceAssistantSettings,
@@ -51,71 +52,7 @@ export interface NotificationItem {
   code?: string;
 }
 
-const INITIAL_NOTIFICATIONS_DATA: NotificationItem[] = [
-  {
-    id: 'n1',
-    category: 'Verification',
-    title: 'Counterfeit detected',
-    description: 'A product you scanned was flagged as potentially counterfeit.',
-    time: '10:42 AM',
-    dateGroup: 'Today',
-    iconType: 'counterfeit',
-    iconBg: '#FEE2E2',
-    isRead: false,
-    scenario: 'COUNTERFEIT',
-    code: '8999990012345',
-  },
-  {
-    id: 'n2',
-    category: 'Verification',
-    title: 'Repeated scan detected',
-    description: 'The same product has been scanned multiple times.',
-    time: '9:18 AM',
-    dateGroup: 'Today',
-    iconType: 'repeat',
-    iconBg: '#FEF3C7',
-    isRead: false,
-    scenario: 'ALREADY_PURCHASED',
-    code: '5000158105224',
-  },
-  {
-    id: 'n3',
-    category: 'Verification',
-    title: 'Regional alert',
-    description: 'A product you scanned may not be intended for your current region.',
-    time: '8:05 AM',
-    dateGroup: 'Today',
-    iconType: 'globe',
-    iconBg: '#EFF6FF',
-    isRead: false,
-    scenario: 'WRONG_REGION',
-    code: 'SNS-BABY-1099',
-  },
-  {
-    id: 'n4',
-    category: 'Verification',
-    title: 'Product verified',
-    description: 'Panadol Extra 500mg matches official manufacturer records.',
-    time: '7:32 PM',
-    dateGroup: 'Yesterday',
-    iconType: 'verified',
-    iconBg: '#059669',
-    isRead: true,
-    scenario: 'AUTHENTIC',
-    code: '5000158105224',
-  },
-  {
-    id: 'n5',
-    category: 'Updates',
-    title: 'App update',
-    description: 'Sensoo has been updated to version 1.2 with new features.',
-    time: '11:15 AM',
-    dateGroup: 'Yesterday',
-    iconType: 'gear',
-    iconBg: '#E2E8F0',
-    isRead: true,
-  },
-];
+const INITIAL_NOTIFICATIONS_DATA: NotificationItem[] = [];
 
 interface RecentScanItem {
   id: string;
@@ -129,63 +66,7 @@ interface RecentScanItem {
   code: string;
 }
 
-const RECENT_SCANS_DATA: RecentScanItem[] = [
-  {
-    id: 'rs1',
-    name: 'Panadol Extra\nTablets 500mg',
-    image: require('../../assets/panadol_extra.png'),
-    status: 'VERIFIED',
-    statusText: 'Verified',
-    time: '10:24 AM',
-    dateGroup: 'Today',
-    scenario: 'AUTHENTIC',
-    code: '5000158105224',
-  },
-  {
-    id: 'rs2',
-    name: 'Dettol Antiseptic\nLiquid 250ml',
-    image: require('../../assets/dettol_antiseptic.png'),
-    status: 'VERIFIED',
-    statusText: 'Verified',
-    time: '09:18 AM',
-    dateGroup: 'Today',
-    scenario: 'AUTHENTIC',
-    code: '5000158067447',
-  },
-  {
-    id: 'rs3',
-    name: 'Dove Body Wash\nDeep Moisture 250ml',
-    image: require('../../assets/dove_body_wash.png'),
-    status: 'COUNTERFEIT',
-    statusText: 'Counterfeit',
-    time: '08:42 AM',
-    dateGroup: 'Today',
-    scenario: 'COUNTERFEIT',
-    code: '8999990012345',
-  },
-  {
-    id: 'rs4',
-    name: 'CeraVe Foaming Cleanser\n473ml',
-    image: require('../../assets/cerave_foaming.png'),
-    status: 'VERIFIED',
-    statusText: 'Verified',
-    time: 'Yesterday, 6:15 PM',
-    dateGroup: 'Yesterday',
-    scenario: 'AUTHENTIC',
-    code: '3606000537008',
-  },
-  {
-    id: 'rs5',
-    name: 'Nivea Sun SPF 50\nSunscreen 200ml',
-    image: require('../../assets/nivea_sun.png'),
-    status: 'WRONG_REGION',
-    statusText: 'Wrong Region',
-    time: 'Yesterday, 2:33 PM',
-    dateGroup: 'Yesterday',
-    scenario: 'WRONG_REGION',
-    code: 'SNS-BABY-1099',
-  },
-];
+const RECENT_SCANS_DATA: RecentScanItem[] = [];
 
 interface VerifiedProductItem {
   id: string;
@@ -196,56 +77,7 @@ interface VerifiedProductItem {
   code: string;
 }
 
-const VERIFIED_PRODUCTS_DATA: VerifiedProductItem[] = [
-  {
-    id: 'vp1',
-    name: 'Panadol Extra\nTablets 500mg',
-    image: require('../../assets/panadol_extra.png'),
-    category: 'Medicine',
-    time: 'Today, 10:24 AM',
-    code: '5000158105224',
-  },
-  {
-    id: 'vp2',
-    name: 'Dettol Antiseptic\nLiquid 250ml',
-    image: require('../../assets/dettol_antiseptic.png'),
-    category: 'Medicine',
-    time: 'Yesterday, 6:15 PM',
-    code: '5000158067447',
-  },
-  {
-    id: 'vp3',
-    name: 'CeraVe Foaming Cleanser\n473ml',
-    image: require('../../assets/cerave_foaming.png'),
-    category: 'Skincare',
-    time: 'Sep 20, 2025, 3:12 PM',
-    code: '3606000537008',
-  },
-  {
-    id: 'vp4',
-    name: 'Nivea Sun SPF 50\nSunscreen 200ml',
-    image: require('../../assets/nivea_sun.png'),
-    category: 'Skincare',
-    time: 'Sep 19, 2025, 11:04 AM',
-    code: 'SNS-MED-9021',
-  },
-  {
-    id: 'vp5',
-    name: 'Colgate Total\nToothpaste 120g',
-    image: require('../../assets/colgate_total.png'),
-    category: 'Personal Care',
-    time: 'Sep 18, 2025, 4:28 PM',
-    code: 'SNS-COL-5512',
-  },
-  {
-    id: 'vp6',
-    name: 'Dove Body Wash\nDeep Moisture 250ml',
-    image: require('../../assets/dove_body_wash.png'),
-    category: 'Personal Care',
-    time: 'Sep 17, 2025, 8:55 PM',
-    code: 'SNS-DOV-1123',
-  },
-];
+const VERIFIED_PRODUCTS_DATA: VerifiedProductItem[] = [];
 
 interface AlertItem {
   id: string;
@@ -264,76 +96,7 @@ interface AlertItem {
   code: string;
 }
 
-const ALERTS_DATA: AlertItem[] = [
-  {
-    id: 'alt1',
-    name: 'Dove Body Wash\nDeep Moisture 250ml',
-    image: require('../../assets/dove_body_wash.png'),
-    alertType: 'Counterfeit',
-    badgeIcon: '!',
-    badgeBg: '#DC2626',
-    badgeTextColor: '#FFFFFF',
-    statusPillText: 'Counterfeit Detected',
-    statusPillBg: '#FEE2E2',
-    statusPillColor: '#DC2626',
-    time: 'Today, 8:42 AM',
-    callout:
-      "This product does not match trusted manufacturer records. It may be fake or altered.",
-    scenario: 'COUNTERFEIT',
-    code: '8999990012345',
-  },
-  {
-    id: 'alt2',
-    name: 'Panadol Extra\nTablets 500mg',
-    image: require('../../assets/panadol_extra.png'),
-    alertType: 'Reused',
-    badgeIcon: '⚠️',
-    badgeBg: '#D97706',
-    badgeTextColor: '#FFFFFF',
-    statusPillText: 'Already Purchased',
-    statusPillBg: '#FEF3C7',
-    statusPillColor: '#D97706',
-    time: 'Yesterday, 5:12 PM',
-    callout:
-      'This product has already been scanned multiple times. It may be reused, cloned or resold.',
-    scenario: 'ALREADY_PURCHASED',
-    code: '5000158105224',
-  },
-  {
-    id: 'alt3',
-    name: 'Dettol Antiseptic\nLiquid 250ml',
-    image: require('../../assets/dettol_antiseptic.png'),
-    alertType: 'Suspicious',
-    badgeIcon: '✈️',
-    badgeBg: '#DC2626',
-    badgeTextColor: '#FFFFFF',
-    statusPillText: 'Impossible Travel',
-    statusPillBg: '#FEE2E2',
-    statusPillColor: '#DC2626',
-    time: 'Sep 19, 2025, 7:36 PM',
-    callout:
-      'This barcode was scanned in two locations too far apart in a short time. This is not possible.',
-    scenario: 'IMPOSSIBLE_TRAVEL',
-    code: '5000158067447',
-  },
-  {
-    id: 'alt4',
-    name: 'CeraVe Foaming Cleanser\n473ml',
-    image: require('../../assets/cerave_foaming.png'),
-    alertType: 'Wrong Region',
-    badgeIcon: '🌐',
-    badgeBg: '#D97706',
-    badgeTextColor: '#FFFFFF',
-    statusPillText: 'Wrong Region',
-    statusPillBg: '#FEF3C7',
-    statusPillColor: '#D97706',
-    time: 'Sep 18, 2025, 2:21 PM',
-    callout:
-      'This product is genuine but not officially distributed in this region. It may be imported or diverted.',
-    scenario: 'WRONG_REGION',
-    code: '3606000537008',
-  },
-];
+const ALERTS_DATA: AlertItem[] = [];
 
 interface ReportItemData {
   id: string;
@@ -345,44 +108,7 @@ interface ReportItemData {
   statusColor: string;
 }
 
-const REPORTS_DATA: ReportItemData[] = [
-  {
-    id: 'rep-1',
-    name: 'Dove Body Wash\nDeep Moisture 250ml',
-    image: require('../../assets/dove_body_wash.png'),
-    date: 'Reported on Aug 20, 2025',
-    status: 'Under Review',
-    statusBg: '#FEE2E2',
-    statusColor: '#DC2626',
-  },
-  {
-    id: 'rep-2',
-    name: 'Milo Powder 400g',
-    image: require('../../assets/colgate_total.png'),
-    date: 'Reported on Aug 18, 2025',
-    status: 'Reviewed',
-    statusBg: '#DCFCE7',
-    statusColor: '#059669',
-  },
-  {
-    id: 'rep-3',
-    name: 'Tylenol Extra Strength 500mg',
-    image: require('../../assets/panadol_extra.png'),
-    date: 'Reported on Aug 12, 2025',
-    status: 'Action Taken',
-    statusBg: '#DBEAFE',
-    statusColor: '#2563EB',
-  },
-  {
-    id: 'rep-4',
-    name: 'Maybelline Fit Me Foundation 30ml',
-    image: require('../../assets/cerave_foaming.png'),
-    date: 'Reported on Aug 10, 2025',
-    status: 'Closed',
-    statusBg: '#F1F5F9',
-    statusColor: '#64748B',
-  },
-];
+const REPORTS_DATA: ReportItemData[] = [];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -402,6 +128,158 @@ export default function HomeScreen() {
   // Notifications & Profile state
   const [notificationFilter, setNotificationFilter] = useState<'All' | 'Verification' | 'System' | 'Updates'>('All');
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS_DATA);
+
+  // Dynamic Live Scan State from Backend
+  const [recentScans, setRecentScans] = useState<RecentScanItem[]>(RECENT_SCANS_DATA);
+  const [verifiedProducts, setVerifiedProducts] = useState<VerifiedProductItem[]>(VERIFIED_PRODUCTS_DATA);
+  const [alerts, setAlerts] = useState<AlertItem[]>(ALERTS_DATA);
+
+  // Real-time synchronization with live backend scans feed
+  useEffect(() => {
+    let isMounted = true;
+    const syncLiveFeed = async () => {
+      try {
+        const feed = await fetchLiveFeed(30);
+        if (!isMounted || !feed || !Array.isArray(feed) || feed.length === 0) return;
+
+        const liveRecent: RecentScanItem[] = [];
+        const liveVerified: VerifiedProductItem[] = [];
+        const liveAlerts: AlertItem[] = [];
+        const liveNotifs: NotificationItem[] = [];
+
+        feed.forEach((item, index) => {
+          const rawAlarms = item.alarms || [];
+          const alarmsLower = rawAlarms.map((a: string) => String(a).toLowerCase());
+          const isClean = rawAlarms.length === 0;
+
+          let scenario: RecentScanItem['scenario'] = 'AUTHENTIC';
+          let alertType: AlertItem['alertType'] = 'Suspicious';
+
+          if (alarmsLower.some((a) => a.includes('purchased') || a.includes('clone') || a.includes('already'))) {
+            scenario = 'ALREADY_PURCHASED';
+            alertType = 'Reused';
+          } else if (alarmsLower.some((a) => a.includes('physics') || a.includes('speed') || a.includes('travel') || a.includes('velocity'))) {
+            scenario = 'IMPOSSIBLE_TRAVEL';
+            alertType = 'Suspicious';
+          } else if (alarmsLower.some((a) => a.includes('region'))) {
+            scenario = 'WRONG_REGION';
+            alertType = 'Wrong Region';
+          } else if (!isClean) {
+            scenario = 'COUNTERFEIT';
+            alertType = 'Counterfeit';
+          }
+
+          const status: RecentScanItem['status'] = isClean
+            ? 'VERIFIED'
+            : (scenario === 'WRONG_REGION' ? 'WRONG_REGION' : 'COUNTERFEIT');
+
+          const statusText = isClean
+            ? 'Verified'
+            : (scenario === 'WRONG_REGION' ? 'Wrong Region' : (scenario === 'ALREADY_PURCHASED' ? 'Already Purchased' : 'Counterfeit'));
+
+          const timeDisplay = item.timestamp
+            ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Just now';
+
+          const prodName = item.product_name || `Product\n${item.code}`;
+
+          const prodImage = item.image_url
+            ? { uri: item.image_url }
+            : require('../../assets/dove_body_wash.png');
+
+          const recentEntry: RecentScanItem = {
+            id: `feed-recent-${item.timestamp || index}-${index}`,
+            name: prodName,
+            image: prodImage,
+            status,
+            statusText,
+            time: timeDisplay,
+            dateGroup: 'Today',
+            scenario,
+            code: item.code,
+          };
+          liveRecent.push(recentEntry);
+
+          if (isClean) {
+            liveVerified.push({
+              id: `feed-vp-${item.timestamp || index}-${index}`,
+              name: prodName,
+              image: prodImage,
+              category: 'Personal Care',
+              time: `Today, ${timeDisplay}`,
+              code: item.code,
+            });
+          } else {
+            liveAlerts.push({
+              id: `feed-alt-${item.timestamp || index}-${index}`,
+              name: prodName,
+              image: prodImage,
+              alertType,
+              badgeIcon: alertType === 'Counterfeit' ? '!' : (alertType === 'Reused' ? '⚠️' : '✈️'),
+              badgeBg: alertType === 'Counterfeit' ? '#DC2626' : '#D97706',
+              badgeTextColor: '#FFFFFF',
+              statusPillText: statusText,
+              statusPillBg: alertType === 'Counterfeit' ? '#FEE2E2' : '#FEF3C7',
+              statusPillColor: alertType === 'Counterfeit' ? '#DC2626' : '#D97706',
+              time: `Today, ${timeDisplay}`,
+              callout: rawAlarms.join('; ') || 'Threat anomaly recorded in live telemetry.',
+              scenario: scenario as any,
+              code: item.code,
+            });
+
+            liveNotifs.push({
+              id: `feed-notif-${item.timestamp || index}-${index}`,
+              category: 'Verification',
+              title: `${statusText} alert`,
+              description: `Live scan for ${item.code}: ${rawAlarms.join(', ')}`,
+              time: timeDisplay,
+              dateGroup: 'Today',
+              iconType: alertType === 'Counterfeit' ? 'counterfeit' : 'repeat',
+              iconBg: alertType === 'Counterfeit' ? '#FEE2E2' : '#FEF3C7',
+              isRead: false,
+              scenario: scenario as any,
+              code: item.code,
+            });
+          }
+        });
+
+        if (liveRecent.length > 0) {
+          setRecentScans((prev) => {
+            const existingCodes = new Set(liveRecent.map((l) => l.code));
+            return [...liveRecent, ...prev.filter((p) => !existingCodes.has(p.code))];
+          });
+        }
+        if (liveVerified.length > 0) {
+          setVerifiedProducts((prev) => {
+            const existingCodes = new Set(liveVerified.map((l) => l.code));
+            return [...liveVerified, ...prev.filter((p) => !existingCodes.has(p.code))];
+          });
+        }
+        if (liveAlerts.length > 0) {
+          setAlerts((prev) => {
+            const existingCodes = new Set(liveAlerts.map((l) => l.code));
+            return [...liveAlerts, ...prev.filter((p) => !existingCodes.has(p.code))];
+          });
+        }
+        if (liveNotifs.length > 0) {
+          setNotifications((prev) => {
+            const existingIds = new Set(prev.map((n) => n.id));
+            const uniqueNotifs = liveNotifs.filter((n) => !existingIds.has(n.id));
+            return [...uniqueNotifs, ...prev];
+          });
+        }
+      } catch (err) {
+        console.warn('Live feed error on home screen:', err);
+      }
+    };
+
+    syncLiveFeed();
+    const interval = setInterval(syncLiveFeed, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const [showPersonalInfoModal, setShowPersonalInfoModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -661,11 +539,12 @@ export default function HomeScreen() {
     });
   };
 
-  // Filtered lists
-  const filteredRecentScans = RECENT_SCANS_DATA.filter((item) => {
+  // Filtered lists with real-time sync data
+  const filteredRecentScans = recentScans.filter((item) => {
     const matchesSearch =
       recentSearch === '' ||
-      item.name.toLowerCase().includes(recentSearch.toLowerCase());
+      item.name.toLowerCase().includes(recentSearch.toLowerCase()) ||
+      item.code.toLowerCase().includes(recentSearch.toLowerCase());
     if (!matchesSearch) return false;
     if (recentFilter === 'Verified') return item.status === 'VERIFIED';
     if (recentFilter === 'Counterfeit') return item.status === 'COUNTERFEIT';
@@ -673,16 +552,17 @@ export default function HomeScreen() {
     return true;
   });
 
-  const filteredVerifiedProducts = VERIFIED_PRODUCTS_DATA.filter((item) => {
+  const filteredVerifiedProducts = verifiedProducts.filter((item) => {
     const matchesSearch =
       verifiedSearch === '' ||
-      item.name.toLowerCase().includes(verifiedSearch.toLowerCase());
+      item.name.toLowerCase().includes(verifiedSearch.toLowerCase()) ||
+      item.code.toLowerCase().includes(verifiedSearch.toLowerCase());
     if (!matchesSearch) return false;
     if (verifiedFilter !== 'All') return item.category === verifiedFilter;
     return true;
   });
 
-  const filteredAlerts = ALERTS_DATA.filter((item) => {
+  const filteredAlerts = alerts.filter((item) => {
     if (alertFilter === 'All') return true;
     return item.alertType === alertFilter;
   });
@@ -826,7 +706,14 @@ export default function HomeScreen() {
             </View>
 
             {/* Recent Scans Preview Items */}
-            {RECENT_SCANS_DATA.slice(0, 3).map((item) => (
+            {recentScans.length === 0 ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: '#94A3B8', fontWeight: '500' }}>
+                  No recent scans yet. Tap "Tap to Scan" above to verify.
+                </Text>
+              </View>
+            ) : (
+              recentScans.slice(0, 3).map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={styles.scanCard}
@@ -857,7 +744,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
-            ))}
+            )))}
           </ScrollView>
         </>
       )}
