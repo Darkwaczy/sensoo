@@ -145,13 +145,80 @@ export interface ChatMessageItem {
 let persistentChatHistory: ChatMessageItem[] = [];
 
 const getScanResultCardData = (scenario: string, scanCode: string, productName: string): ChatScanResultData => {
-  const isCeraVe = scanCode.includes('3011') || (productName && productName.toLowerCase().includes('cerave'));
-  const isFake = scenario === 'COUNTERFEIT' || scanCode.includes('FAKE');
-  const isPurchased = scenario === 'ALREADY_PURCHASED' || scanCode.includes('8832');
-  const isTravel = scenario === 'IMPOSSIBLE_TRAVEL' || scanCode.includes('SPEED') || scanCode.includes('PHYSICS');
-  const isRegion = scenario === 'WRONG_REGION' || scanCode.includes('1099');
+  const resolvedName = productName || (scanCode ? `Product (${scanCode})` : 'Scanned Product');
+  const resolvedCode = scanCode || 'UNLISTED';
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  if (isFake) {
+  if (scenario === 'ALREADY_PURCHASED') {
+    return {
+      scenario: 'ALREADY_PURCHASED',
+      title: 'Already Purchased',
+      subtitle: 'This product has already been scanned multiple times. It may be reused, cloned or resold.',
+      titleColor: '#D97706',
+      heroImage: require('../../assets/icons/hero_purchased.png'),
+      productImage: require('../../assets/barcode_icon.png'),
+      productName: resolvedName,
+      statusBadgeText: 'Already Purchased',
+      statusBadgeBg: '#FEF3C7',
+      statusBadgeColor: '#D97706',
+      details: [
+        { label: 'Product', value: resolvedName },
+        { label: 'Barcode', value: resolvedCode },
+        { label: 'Security State', value: 'Already Purchased / Retired' },
+        { label: 'Detection', value: 'Clone / Recycling Alert' },
+      ],
+      calloutText: 'This security code was already redeemed and marked as purchased. High probability of recycled packaging.',
+      calloutType: 'warning',
+    };
+  }
+
+  if (scenario === 'IMPOSSIBLE_TRAVEL') {
+    return {
+      scenario: 'IMPOSSIBLE_TRAVEL',
+      title: 'Impossible Travel',
+      subtitle: 'This product was scanned in two locations too far apart in a short time. This is not possible.',
+      titleColor: '#DC2626',
+      heroImage: require('../../assets/icons/hero_travel.png'),
+      productImage: require('../../assets/barcode_icon.png'),
+      productName: resolvedName,
+      statusBadgeText: 'Impossible Travel',
+      statusBadgeBg: '#FEE2E2',
+      statusBadgeColor: '#DC2626',
+      details: [
+        { label: 'Product', value: resolvedName },
+        { label: 'Barcode', value: resolvedCode },
+        { label: 'Scan Time', value: `Today, ${now}` },
+        { label: 'Location Conflict', value: 'Velocity Anomaly (> 900 km/h)' },
+      ],
+      calloutText: 'Telemetry shows this code scanned concurrently across impossible flight speeds. Clones detected.',
+      calloutType: 'danger',
+    };
+  }
+
+  if (scenario === 'WRONG_REGION') {
+    return {
+      scenario: 'WRONG_REGION',
+      title: 'Wrong Region',
+      subtitle: 'This product is genuine, but it is not distributed in this region. It may be imported or diverted.',
+      titleColor: '#3B82F6',
+      heroImage: require('../../assets/icons/hero_region.png'),
+      productImage: require('../../assets/barcode_icon.png'),
+      productName: resolvedName,
+      statusBadgeText: 'Wrong Region',
+      statusBadgeBg: '#DBEAFE',
+      statusBadgeColor: '#2563EB',
+      details: [
+        { label: 'Product', value: resolvedName },
+        { label: 'Barcode', value: resolvedCode },
+        { label: 'Intended Territory', value: 'Unauthorized Regional Diversion' },
+        { label: 'Current Location', value: 'Lagos, Nigeria' },
+      ],
+      calloutText: 'Scan detected in Nigeria, but authorized distribution territory differs. Unauthorized regional diversion.',
+      calloutType: 'warning',
+    };
+  }
+
+  if (scenario === 'COUNTERFEIT') {
     return {
       scenario: 'COUNTERFEIT',
       title: 'Counterfeit / Unregistered',
@@ -159,12 +226,12 @@ const getScanResultCardData = (scenario: string, scanCode: string, productName: 
       titleColor: '#DC2626',
       heroImage: require('../../assets/icons/hero_counterfeit.png'),
       productImage: require('../../assets/barcode_icon.png'),
-      productName: productName || (scanCode ? `Unregistered Product (${scanCode})` : 'Unregistered Product'),
+      productName: resolvedName,
       statusBadgeText: 'Unverified / Counterfeit',
       statusBadgeBg: '#FEE2E2',
       statusBadgeColor: '#DC2626',
       details: [
-        { label: 'Barcode', value: scanCode || 'Unlisted Barcode' },
+        { label: 'Barcode', value: resolvedCode },
         { label: 'Origin', value: 'Not in Whitelist' },
         { label: 'Manufacturer', value: 'Unknown Origin' },
         { label: 'Registry Match', value: 'No Record' },
@@ -174,132 +241,25 @@ const getScanResultCardData = (scenario: string, scanCode: string, productName: 
     };
   }
 
-  if (isPurchased) {
-    return {
-      scenario: 'ALREADY_PURCHASED',
-      title: 'Already Purchased',
-      subtitle: 'This product has already been scanned multiple times. It may be reused, cloned or resold.',
-      titleColor: '#D97706',
-      heroImage: require('../../assets/icons/hero_purchased.png'),
-      productImage: require('../../assets/panadol_extra.png'),
-      productName: productName || 'Panadol Extra\nTablets 500mg',
-      statusBadgeText: 'Already Purchased',
-      statusBadgeBg: '#FEF3C7',
-      statusBadgeColor: '#D97706',
-      details: [
-        { label: 'Brand', value: 'Panadol' },
-        { label: 'Manufacturer', value: 'Haleon' },
-        { label: 'Barcode', value: scanCode || '5000158105224' },
-        { label: 'Batch Number', value: 'A3F7K2' },
-        { label: 'Expiry Date', value: 'Dec 2026' },
-      ],
-      calloutText: 'This security code was already redeemed and marked as purchased. High probability of recycled packaging.',
-      calloutType: 'warning',
-    };
-  }
-
-  if (isTravel) {
-    return {
-      scenario: 'IMPOSSIBLE_TRAVEL',
-      title: 'Impossible Travel',
-      subtitle: 'This product was scanned in two locations too far apart in a short time. This is not possible.',
-      titleColor: '#DC2626',
-      heroImage: require('../../assets/icons/hero_travel.png'),
-      productImage: require('../../assets/dettol_antiseptic.png'),
-      productName: productName || 'Dettol Antiseptic\nLiquid 250ml',
-      statusBadgeText: 'Impossible Travel',
-      statusBadgeBg: '#FEE2E2',
-      statusBadgeColor: '#DC2626',
-      details: [
-        { label: 'Brand', value: 'Dettol' },
-        { label: 'Manufacturer', value: 'Reckitt Benckiser' },
-        { label: 'Barcode', value: scanCode || '5000158067447' },
-        { label: 'Batch Number', value: 'BATCH-2026-D3' },
-        { label: 'Velocity Anomaly', value: '5,333 km/h' },
-      ],
-      calloutText: 'Telemetry shows this code scanned concurrently across impossible flight speeds. Clones detected.',
-      calloutType: 'danger',
-    };
-  }
-
-  if (isRegion) {
-    return {
-      scenario: 'WRONG_REGION',
-      title: 'Wrong Region',
-      subtitle: 'This product is genuine, but it is not distributed in this region. It may be imported or diverted.',
-      titleColor: '#3B82F6',
-      heroImage: require('../../assets/icons/hero_region.png'),
-      productImage: require('../../assets/panadol_extra.png'),
-      productName: productName || 'Infant Formula Powder 400g',
-      statusBadgeText: 'Wrong Region',
-      statusBadgeBg: '#DBEAFE',
-      statusBadgeColor: '#2563EB',
-      details: [
-        { label: 'Brand', value: 'NutriCare Global' },
-        { label: 'Manufacturer', value: 'NutriCare International' },
-        { label: 'Barcode', value: scanCode || 'SNS-BABY-1099' },
-        { label: 'Batch Number', value: 'BATCH-2026-N2' },
-        { label: 'Authorized Region', value: 'Kano, Nigeria' },
-      ],
-      calloutText: 'Scan detected in Lagos, but authorized delivery territory is Kano. Unauthorized regional diversion.',
-      calloutType: 'warning',
-    };
-  }
-
-  const isDrRashel =
-    scanCode.includes('6971764150130') ||
-    scanCode.includes('DRL-1431') ||
-    scanCode.includes('150130') ||
-    (productName && productName.toLowerCase().includes('rashel'));
-
-  if (isDrRashel) {
-    return {
-      scenario: 'AUTHENTIC',
-      title: 'Authentic Product',
-      subtitle: 'This product matches official manufacturer records.',
-      titleColor: '#059669',
-      heroImage: require('../../assets/icons/hero_authentic.png'),
-      productImage: require('../../assets/cerave_foaming.png'),
-      productName: productName || 'Dr. Rashel Face Care 50ml',
-      statusBadgeText: 'Verified by Manufacturer',
-      statusBadgeBg: '#DCFCE7',
-      statusBadgeColor: '#059669',
-      details: [
-        { label: 'Brand', value: 'Dr. Rashel' },
-        { label: 'Manufacturer', value: 'Yiwu Rashel Trading Co., Ltd' },
-        { label: 'Barcode', value: scanCode || '6971764150130' },
-        { label: 'Batch Number', value: 'BATCH-DRL-1431' },
-        { label: 'Expiry Date', value: 'Jan 2028' },
-        { label: 'Category', value: 'Skincare' },
-        { label: 'Country of Origin', value: 'China (P.R.C.)' },
-      ],
-      calloutText: 'This product matches official records from the manufacturer.',
-      calloutType: 'success',
-    };
-  }
-
-  // Default: Authentic
+  // Authentic Product
   return {
     scenario: 'AUTHENTIC',
     title: 'Authentic Product',
     subtitle: 'This product matches official manufacturer records.',
     titleColor: '#059669',
     heroImage: require('../../assets/icons/hero_authentic.png'),
-    productImage: require('../../assets/panadol_extra.png'),
-    productName: productName || (isCeraVe ? 'CeraVe Moisturizing Lotion 8 fl oz' : 'Panadol Extra\nTablets 500mg'),
-    statusBadgeText: 'Verified by Manufacturer',
+    productImage: require('../../assets/barcode_icon.png'),
+    productName: resolvedName,
+    statusBadgeText: 'Verified Authentic',
     statusBadgeBg: '#DCFCE7',
     statusBadgeColor: '#059669',
     details: [
-      { label: 'Brand', value: isCeraVe ? 'CeraVe' : 'Panadol' },
-      { label: 'Manufacturer', value: isCeraVe ? "L'Oréal Dermatological" : 'Haleon' },
-      { label: 'Barcode', value: scanCode || '3011794101306' },
-      { label: 'Batch Number', value: isCeraVe ? 'BATCH-2026-CV40' : 'A3F7K2' },
-      { label: 'Expiry Date', value: 'Dec 2026' },
-      { label: 'Category', value: isCeraVe ? 'Skincare' : 'Medicine' },
-      { label: 'Country of Origin', value: isCeraVe ? 'France' : 'United Kingdom' },
+      { label: 'Product', value: resolvedName },
+      { label: 'Barcode', value: resolvedCode },
+      { label: 'Status', value: 'Whitelist Confirmed' },
+      { label: 'Verification', value: 'Official Registry Match' },
     ],
-    calloutText: 'This product matches official records from the manufacturer.',
+    calloutText: 'This product matches official records from the authorized manufacturer.',
     calloutType: 'success',
   };
 };
