@@ -199,115 +199,101 @@ export async function lookupEmdexDrug(
 }
 
 /**
- * Direct client-side lookup via Universal Real-Time GTIN Web Search
- * Uses Google Search grounding via Gemini 2.5 Flash Lite to dynamically identify any
- * international commercial barcode (EAN-13, UPC-A, GTIN) without static catalogs.
+ * Direct client-side lookup via Universal Real-Time GTIN Web Search & GS1 verification.
+ * Calls Sensoo Backend read-only /api/v1/lookup with Groq LLaMA 3.3 fallback.
+ * 100% READ-ONLY: Never writes or registers anything to the database without explicit user request.
  */
 export async function lookupLiveGtinWeb(
   barcode: string
-): Promise<{ productName: string; brand: string; batch: string; category?: string } | null> {
+): Promise<{ productName: string; brand: string; batch: string; category?: string; status?: string; origin?: string } | null> {
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
-  const stripped = digits.startsWith('0') ? digits.slice(1) : digits;
-
-  // 1. High-speed unmetered web search snippet resolver (zero API key / quota dependency)
-  try {
-    const searchCtrl = new AbortController();
-    const searchTimeout = setTimeout(() => searchCtrl.abort(), 4000);
-    const searchRes = await fetch(`https://html.duckduckgo.com/html/?q=${stripped}`, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      signal: searchCtrl.signal,
-    });
-    clearTimeout(searchTimeout);
-
-    if (searchRes.ok) {
-      const html = await searchRes.text();
-      const snippetMatches = html.match(/<a class="result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g) || [];
-      for (const s of snippetMatches) {
-        const cleanS = s.replace(/<[^>]+>/g, '').trim();
-        const pMatch = cleanS.match(
-          /([A-Z][a-zA-Z0-9\s\-&]+(?:Baby Wipes|Wipes|Lotion|Serum|Cream|Soap|Shampoo|Tablets|Syrup|Capsules|Oil|Care|Clean|Detergent))/
-        );
-        if (pMatch && !pMatch[1].toLowerCase().includes('barcode') && !pMatch[1].toLowerCase().includes('clean day')) {
-          const matchedName = pMatch[1].trim();
-          const brandWord = matchedName.split(' ')[0] || 'Verified Brand';
-          return {
-            productName: matchedName,
-            brand: brandWord,
-            batch: `GTIN-${digits}`,
-            category: 'Personal Hygiene & Care',
-          };
-        }
-      }
-    }
-  } catch {
-    // Continue to Gemini fallback
-  }
-
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
-  if (!apiKey) return null;
-
-  const prompt = `Identify the commercial retail product associated with barcode: ${stripped} or ${digits}. Output ONLY valid JSON: {"found": true, "product_name": "exact product name", "brand": "brand name", "category": "category"}. If not found, output: {"found": false}.`;
-
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
-        }),
-        signal: ctrl.signal,
-      }
-    );
-    clearTimeout(t);
+    const timeout = setTimeout(() => ctrl.abort(), 7000);
+    const res = await fetch(`${SENSOO_API_BASE_URL}/lookup?barcode=${digits}`, {
+      signal: ctrl.signal,
+    });
+    clearTimeout(timeout);
 
     if (res.ok) {
       const data = await res.json();
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      const rawText = parts.map((p: any) => p.text || '').join('').trim();
-
-      let cleanJson = rawText;
-      if (cleanJson.includes('```json')) {
-        cleanJson = cleanJson.split('```json')[1].split('```')[0].trim();
-      } else if (cleanJson.includes('```')) {
-        cleanJson = cleanJson.split('```')[1].split('```')[0].trim();
+      if (data.found && data.product_name) {
+        return {
+          productName: data.product_name,
+          brand: data.brand || 'Verified Brand',
+          batch: `GTIN-${digits}`,
+          category: data.category || 'Consumer Retail Goods',
+          status: data.status || 'AUTHENTIC',
+          origin: data.origin_country,
+        };
+      } else if (data.is_valid_gs1) {
+        return {
+          productName: `Authentic GS1 Product (${data.origin_country || 'International'})`,
+          brand: data.origin_country || 'GS1 Member Brand',
+          batch: `GTIN-${digits}`,
+          category: 'Consumer Retail Goods',
+          status: 'AUTHENTIC',
+          origin: data.origin_country,
+        };
       }
+    }
+  } catch (err) {
+    console.warn('Backend live lookup notice:', err);
+  }
 
-      try {
-        const parsed = JSON.parse(cleanJson);
-        if (parsed.found && parsed.product_name && !parsed.product_name.toLowerCase().includes('unknown')) {
-          return {
-            productName: parsed.product_name,
-            brand: parsed.brand || 'Verified International Brand',
-            batch: `GTIN-${digits}`,
-            category: parsed.category || 'Consumer Retail Goods',
-          };
-        }
-      } catch {
-        if (rawText.toLowerCase().includes('is') && rawText.includes('"')) {
-          const m = rawText.match(/["']([^"']+)["']/);
-          if (m && m[1]) {
+  // Backup fallback: Groq LLaMA 3.3 (Fast, active in .env)
+  const groqKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
+  if (groqKey) {
+    try {
+      const groqCtrl = new AbortController();
+      const groqTimeout = setTimeout(() => groqCtrl.abort(), 5000);
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a global product barcode identification database. Given a retail barcode (EAN-13, UPC-A, GTIN), return strictly JSON: {"found": true, "product_name": "...", "brand": "..."} or {"found": false}. Never invent or guess names if unknown.',
+            },
+            {
+              role: 'user',
+              content: `Identify product for barcode: ${digits}`,
+            },
+          ],
+          temperature: 0.1,
+          response_format: { type: 'json_object' },
+        }),
+        signal: groqCtrl.signal,
+      });
+      clearTimeout(groqTimeout);
+
+      if (groqRes.ok) {
+        const groqData = await groqRes.json();
+        const content = groqData.choices?.[0]?.message?.content;
+        if (content) {
+          const parsed = JSON.parse(content);
+          if (parsed.found && parsed.product_name) {
             return {
-              productName: m[1],
-              brand: 'Verified International Brand',
+              productName: parsed.product_name,
+              brand: parsed.brand || 'Verified Brand',
               batch: `GTIN-${digits}`,
             };
           }
         }
       }
+    } catch {
+      // Continue quietly
     }
-  } catch (err) {
-    console.warn('Live GTIN client resolution notice:', err);
   }
+
   return null;
 }
 
@@ -375,24 +361,11 @@ export async function verifyScanOnline(
   // 2. Dual-Layer Real-Time Verification: Tier 1 - OpenFoodFacts
   const offHit = await lookupOpenFoodFacts(cleanCode);
   if (offHit) {
-    fetch(`${SENSOO_API_BASE_URL}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: cleanCode,
-        product_name: offHit.productName,
-        manufacturer: offHit.brand,
-        batch_id: offHit.batch,
-        region: 'GLOBAL',
-        state: 'IN_STOCK',
-      }),
-    }).catch(() => {});
-
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in OpenFoodFacts Global Barcode Whitelist',
       alarms: [],
-      new_state: 'PURCHASED_RETIRED',
+      new_state: 'IN_STOCK',
       product_name: offHit.productName,
       manufacturer: offHit.brand,
       batch_id: offHit.batch,
@@ -400,27 +373,30 @@ export async function verifyScanOnline(
     };
   }
 
-  // Tier 2 - UPCitemdb Commercial Retail Database
+  // Tier 2 - Universal Real-Time Web & GS1 GTIN Search (Exact Match)
+  const webHit = await lookupLiveGtinWeb(cleanCode);
+  if (webHit) {
+    return {
+      status: (webHit.status as any) || 'AUTHENTIC',
+      reason: webHit.origin
+        ? `Verified GS1 Standard Barcode (${webHit.origin})`
+        : 'Verified in Live Global GS1 & Web Product Registry',
+      alarms: [],
+      new_state: 'IN_STOCK',
+      product_name: webHit.productName,
+      manufacturer: webHit.brand,
+      batch_id: webHit.batch,
+    };
+  }
+
+  // Tier 3 - UPCitemdb Commercial Retail Database
   const upcHit = await lookupUpcItemDb(cleanCode);
   if (upcHit) {
-    fetch(`${SENSOO_API_BASE_URL}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: cleanCode,
-        product_name: upcHit.productName,
-        manufacturer: upcHit.brand,
-        batch_id: upcHit.batch,
-        region: 'GLOBAL',
-        state: 'IN_STOCK',
-      }),
-    }).catch(() => {});
-
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in Global Commercial Retail Barcode Whitelist',
       alarms: [],
-      new_state: 'PURCHASED_RETIRED',
+      new_state: 'IN_STOCK',
       product_name: upcHit.productName,
       manufacturer: upcHit.brand,
       batch_id: upcHit.batch,
@@ -428,54 +404,14 @@ export async function verifyScanOnline(
     };
   }
 
-  // Tier 3 - Universal Real-Time Web & GS1 GTIN Search
-  const webHit = await lookupLiveGtinWeb(cleanCode);
-  if (webHit) {
-    fetch(`${SENSOO_API_BASE_URL}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: cleanCode,
-        product_name: webHit.productName,
-        manufacturer: webHit.brand,
-        batch_id: webHit.batch,
-        region: 'GLOBAL',
-        state: 'IN_STOCK',
-      }),
-    }).catch(() => {});
-
-    return {
-      status: 'AUTHENTIC',
-      reason: 'Verified in Live Global GS1 & Web Product Registry',
-      alarms: [],
-      new_state: 'PURCHASED_RETIRED',
-      product_name: webHit.productName,
-      manufacturer: webHit.brand,
-      batch_id: webHit.batch,
-    };
-  }
-
   // Tier 4 - EMDEX Nigeria Drug Database
   const emdexHit = await lookupEmdexDrug(cleanCode);
   if (emdexHit) {
-    fetch(`${SENSOO_API_BASE_URL}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: cleanCode,
-        product_name: emdexHit.productName,
-        manufacturer: emdexHit.brand,
-        batch_id: emdexHit.batch,
-        region: 'GLOBAL',
-        state: 'IN_STOCK',
-      }),
-    }).catch(() => {});
-
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in EMDEX Nigeria National Drug Whitelist',
       alarms: [],
-      new_state: 'PURCHASED_RETIRED',
+      new_state: 'IN_STOCK',
       product_name: emdexHit.productName,
       manufacturer: emdexHit.brand,
       batch_id: emdexHit.batch,

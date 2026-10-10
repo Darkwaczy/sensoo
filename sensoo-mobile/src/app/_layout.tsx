@@ -3,12 +3,14 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
+import { startRenderKeepAlive } from '../services/renderKeepAliveService';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
+    startRenderKeepAlive();
   }, []);
 
   return (
