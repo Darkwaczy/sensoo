@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { verifyScanOnline, ScanApiResponse } from '../services/sensooApiService';
 import { getCurrentUserLocation } from '../services/clinicService';
-import { saveScanToLocalHistory } from '../services/sensooStorageService';
+import { getStoredScans, saveScanToLocalHistory } from '../services/sensooStorageService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -150,10 +150,28 @@ export default function CheckingScreen() {
       let resolvedReason = apiResponse.reason || 'Product verified in official registry.';
       let verdictStatus: 'GENUINE' | 'FAKE' | 'ALREADY_PURCHASED' | 'IMPOSSIBLE_PHYSICS' | 'WRONG_REGION' = 'GENUINE';
 
+      // 1. Check if this unique barcode was already scanned previously (Clone / Double-Spend detection)
+      const storedScans = await getStoredScans();
+      const prevScan = (storedScans || []).find(
+        (s) => s.code === scannedCode && (Date.now() - new Date(s.timestamp).getTime() > 3000)
+      );
+
       const alarms = (apiResponse.alarms || []).map((a) => a.toLowerCase());
       const reasonLower = (apiResponse.reason || '').toLowerCase();
+      const isBackendClone =
+        alarms.some((a) => a.includes('purchased') || a.includes('clone') || a.includes('already')) ||
+        reasonLower.includes('already purchased') ||
+        reasonLower.includes('clone');
 
-      if (apiResponse.status === 'AUTHENTIC') {
+      if (prevScan || isBackendClone) {
+        scenario = 'ALREADY_PURCHASED';
+        verdictStatus = 'ALREADY_PURCHASED';
+        const scanCity = prevScan?.location || 'Eket';
+        const scanTime = prevScan?.time || 'earlier today';
+        resolvedName = prevScan?.name || apiResponse.product_name || `FAB Biscuit (${scannedCode})`;
+        resolvedBrand = prevScan?.manufacturer || apiResponse.manufacturer || 'Registered Brand';
+        resolvedReason = `🚨 CLONE DETECTED: This unique product was already purchased and scanned in ${scanCity} at ${scanTime}. High probability of cloned packaging or duplicate barcode reuse.`;
+      } else if (apiResponse.status === 'AUTHENTIC') {
         scenario = 'AUTHENTIC';
         verdictStatus = 'GENUINE';
         resolvedName = apiResponse.product_name || `Authentic Product (${scannedCode})`;
@@ -163,13 +181,6 @@ export default function CheckingScreen() {
       } else {
         // Real alarms classification directly from live backend
         if (
-          alarms.some((a) => a.includes('purchased') || a.includes('clone') || a.includes('already')) ||
-          reasonLower.includes('already purchased') ||
-          reasonLower.includes('clone')
-        ) {
-          scenario = 'ALREADY_PURCHASED';
-          verdictStatus = 'ALREADY_PURCHASED';
-        } else if (
           alarms.some((a) => a.includes('physics') || a.includes('speed') || a.includes('travel') || a.includes('velocity')) ||
           reasonLower.includes('physics') ||
           reasonLower.includes('velocity') ||
@@ -201,6 +212,7 @@ export default function CheckingScreen() {
       }
 
       const userLoc = await getCurrentUserLocation();
+      const detectedCity = userLoc.city || 'Eket';
 
       setVerdict({
         code: scannedCode,
@@ -208,13 +220,13 @@ export default function CheckingScreen() {
         brand: resolvedBrand,
         batch: resolvedBatch,
         status: verdictStatus,
-        title: scenario === 'AUTHENTIC' ? '✓ Authentic Product Verified' : `🚨 ${scenario.replace('_', ' ')}`,
+        title: scenario === 'AUTHENTIC' ? '✓ Authentic Product Verified' : (scenario === 'ALREADY_PURCHASED' ? '🚨 Already Purchased / Cloned Pack' : `🚨 ${scenario.replace('_', ' ')}`),
         description: resolvedReason,
-        region: userLoc.city || 'Current Location',
+        region: scenario === 'ALREADY_PURCHASED' ? `${prevScan?.location || 'Eket'} (Previous Scan Recorded)` : detectedCity,
         telemetry: {
           lat: userLoc.lat || 0,
           lng: userLoc.lng || 0,
-          velocity: '0 km/h (Live)',
+          velocity: scenario === 'ALREADY_PURCHASED' ? 'Reused Code (Duplicate)' : '0 km/h (Live)',
           time: now,
         },
       });

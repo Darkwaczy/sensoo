@@ -163,7 +163,11 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
         # Determine verification result
         if alarms:
             status = "FAKE"
-            reason = "; ".join(alarms)
+            if any("already purchased" in a.lower() or "clone" in a.lower() for a in alarms):
+                prev_time_str = previous_scan.timestamp.strftime("%I:%M %p") if previous_scan else "earlier"
+                reason = f"🚨 CLONE DETECTED: Product was already scanned in Eket at {prev_time_str}. High probability of cloned packaging or duplicate distribution."
+            else:
+                reason = "; ".join(alarms)
             new_state = product.state
         else:
             status = "AUTHENTIC"
