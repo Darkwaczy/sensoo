@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Speech from 'expo-speech';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
 import {
   useAudioRecorder,
   RecordingPresets,
@@ -25,6 +26,7 @@ import {
 } from 'expo-audio';
 import { sendAgentMessage } from '../services/sensooAiService';
 import { parseVoiceCommand, transcribeAudioWithGroq } from '../services/voiceAssistantService';
+import { ClinicData, getNearbyClinics, getCurrentUserLocation } from '../services/clinicService';
 
 type AgentScreen =
   | 'home'
@@ -37,58 +39,6 @@ type AgentScreen =
   | 'clinics'
   | 'report'
   | 'report_confirmed';
-
-interface ClinicItem {
-  id: string;
-  name: string;
-  distance: string;
-  status: string;
-  phone: string;
-  address: string;
-}
-
-const CLINICS_DATA: ClinicItem[] = [
-  {
-    id: '1',
-    name: 'Lagos University Teaching Hospital',
-    distance: '4.2 km',
-    status: 'Open 24 hours',
-    phone: '+234 1 774 2000',
-    address: 'Ishaga Rd, Idi-Araba, Surulere',
-  },
-  {
-    id: '2',
-    name: 'Reddington Hospital',
-    distance: '5.1 km',
-    status: 'Open now',
-    phone: '+234 1 271 5340',
-    address: '12 Idowu Martins St, Victoria Island',
-  },
-  {
-    id: '3',
-    name: 'Ikeja General Hospital',
-    distance: '6.8 km',
-    status: 'Open now',
-    phone: '+234 1 497 0000',
-    address: 'Oba Akinjobi Way, GRA, Ikeja',
-  },
-  {
-    id: '4',
-    name: 'St. Nicholas Hospital',
-    distance: '8.3 km',
-    status: 'Open now',
-    phone: '+234 1 460 3000',
-    address: '57 Campbell St, Lagos Island',
-  },
-  {
-    id: '5',
-    name: 'Lagos State Medical Centre',
-    distance: '9.0 km',
-    status: 'Open now',
-    phone: '+234 1 295 1000',
-    address: 'Alausa Secretariat, Ikeja',
-  },
-];
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -135,6 +85,7 @@ export interface ChatMessageItem {
   toolCallStatus?: 'in_progress' | 'completed';
   scanResult?: ChatScanResultData;
   reportResult?: ChatReportResultData;
+  clinicsData?: ClinicData[];
   evidencePrompt?: {
     productName: string;
     location: string;
@@ -290,9 +241,15 @@ export default function AgentScreenComponent() {
   const [selectedDosage, setSelectedDosage] = useState<'1' | '2' | 'more' | null>(null);
   const [dosageSubmitted, setDosageSubmitted] = useState(false);
 
-  // Clinics mode: Map vs List
+  // Live GPS Clinics State
   const [clinicViewMode, setClinicViewMode] = useState<'list' | 'map'>('list');
-  const [selectedClinic, setSelectedClinic] = useState<ClinicItem>(CLINICS_DATA[0]);
+  const [clinicsList, setClinicsList] = useState<ClinicData[]>([]);
+  const [selectedClinic, setSelectedClinic] = useState<ClinicData | null>(null);
+  const [userLocationInfo, setUserLocationInfo] = useState<{ lat: number; lng: number; city: string }>({
+    lat: 6.5244,
+    lng: 3.3792,
+    city: 'Lagos, Nigeria',
+  });
 
   const contextProductName =
     (params.productName as string) ||
@@ -302,9 +259,28 @@ export default function AgentScreenComponent() {
 
   // Report Form state
   const [reportProductName, setReportProductName] = useState(contextProductName);
-  const [reportLocation, setReportLocation] = useState('Idumota Market, Lagos');
+  const [reportLocation, setReportLocation] = useState('Lagos, Nigeria');
   const [reportDetails, setReportDetails] = useState('');
   const [reportPhotoAttached, setReportPhotoAttached] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    getCurrentUserLocation().then((loc) => {
+      if (!isMounted) return;
+      setUserLocationInfo({ lat: loc.lat, lng: loc.lng, city: loc.city });
+      setReportLocation(loc.city);
+      getNearbyClinics(loc.lat, loc.lng).then((list) => {
+        if (!isMounted) return;
+        setClinicsList(list);
+        if (list.length > 0) {
+          setSelectedClinic(list[0]);
+        }
+      });
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Dynamic Live AI State (Voice & Chat)
   const [voiceStatus, setVoiceStatus] = useState<'listening' | 'thinking' | 'speaking'>('listening');
@@ -948,6 +924,16 @@ export default function AgentScreenComponent() {
           toolCallStatus: 'in_progress',
         });
         setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 1200);
+      } else if (res.action === 'CLINICS' || lowerQ.includes('clinic') || lowerQ.includes('hospital') || lowerQ.includes('emergency')) {
+        const liveNearby = clinicsList.length > 0 ? clinicsList : await getNearbyClinics(userLocationInfo.lat, userLocationInfo.lng);
+        appendChatMessage({
+          sender: 'agent',
+          text: res.reply || 'Here are the closest verified emergency medical facilities to your live GPS coordinates:',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          model: res.modelUsed,
+          clinicsData: liveNearby,
+        });
+        speakTextAloud(res.reply, selectedLanguage);
       } else {
         appendChatMessage({
           sender: 'agent',
@@ -1432,6 +1418,34 @@ export default function AgentScreenComponent() {
                     ) : (
                       <View style={msg.sender === 'user' ? styles.userMessageBubble : styles.agentChatBubble}>
                         <Text style={msg.sender === 'user' ? styles.userMessageText : styles.agentChatText}>{msg.text.replace(/\*/g, '')}</Text>
+                        {msg.clinicsData && msg.clinicsData.length > 0 && (
+                          <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 10 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>
+                              🏥 Accredited Emergency Centers ({userLocationInfo.city.split(',')[0]}):
+                            </Text>
+                            {msg.clinicsData.slice(0, 3).map((clinic) => (
+                              <View key={clinic.id} style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E293B' }}>{clinic.name}</Text>
+                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{clinic.address}</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                                  <Text style={{ fontSize: 12, color: '#059669', fontWeight: '700' }}>{clinic.distance} • {clinic.status}</Text>
+                                  <TouchableOpacity
+                                    style={{ backgroundColor: '#059669', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}
+                                    activeOpacity={0.8}
+                                    onPress={() => {
+                                      const cleanPhone = clinic.phone.replace(/[^0-9+]/g, '');
+                                      Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+                                        Alert.alert('Emergency Contact', `${clinic.name}\nPhone: ${clinic.phone}`);
+                                      });
+                                    }}
+                                  >
+                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>📞 Call</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     )}
                     {msg.sender === 'user' && (
@@ -1481,7 +1495,7 @@ export default function AgentScreenComponent() {
                 <TouchableOpacity
                   style={styles.actionCard}
                   activeOpacity={0.82}
-                  onPress={() => setCurrentScreen('contextual')}
+                  onPress={() => handleSendPrompt('Why was this product flagged as counterfeit?')}
                 >
                   <View style={[styles.actionIconBox, { backgroundColor: '#F3EEFF' }]}>
                     <Image
@@ -1500,7 +1514,7 @@ export default function AgentScreenComponent() {
                 <TouchableOpacity
                   style={styles.actionCard}
                   activeOpacity={0.82}
-                  onPress={() => setCurrentScreen('safety_guidance')}
+                  onPress={() => handleSendPrompt('What medical safety precautions should I take after scanning a counterfeit product?')}
                 >
                   <View style={[styles.actionIconBox, { backgroundColor: '#FFF7ED' }]}>
                     <Image
@@ -1522,7 +1536,7 @@ export default function AgentScreenComponent() {
                 <TouchableOpacity
                   style={styles.actionCard}
                   activeOpacity={0.82}
-                  onPress={() => setCurrentScreen('clinics')}
+                  onPress={() => handleSendPrompt('Find accredited emergency clinics and hospitals near me.')}
                 >
                   <View style={[styles.actionIconBox, { backgroundColor: '#ECFDF5' }]}>
                     <Image
@@ -1541,7 +1555,7 @@ export default function AgentScreenComponent() {
                 <TouchableOpacity
                   style={styles.actionCard}
                   activeOpacity={0.82}
-                  onPress={() => setCurrentScreen('report')}
+                  onPress={() => handleSendPrompt('I want to report a suspicious product and counterfeit vendor to NAFDAC.')}
                 >
                   <View style={[styles.actionIconBox, { backgroundColor: '#FEF2F2' }]}>
                     <Image
@@ -2194,7 +2208,7 @@ export default function AgentScreenComponent() {
             </View>
 
             {/* 3 Hospital Cards */}
-            {CLINICS_DATA.slice(0, 3).map((clinic) => (
+            {clinicsList.slice(0, 3).map((clinic) => (
               <View key={clinic.id} style={styles.triageHospitalCard}>
                 <View style={styles.triageCrossBox}>
                   <Text style={styles.triageCrossIcon}>+</Text>
@@ -2209,10 +2223,10 @@ export default function AgentScreenComponent() {
                   style={styles.triagePhoneCircleBtn}
                   activeOpacity={0.7}
                   onPress={() => {
-                    Alert.alert('Call Hospital', `Connecting to ${clinic.name} (${clinic.phone})...`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Call Now' },
-                    ]);
+                    const cleanPhone = clinic.phone.replace(/[^0-9+]/g, '');
+                    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+                      Alert.alert('Emergency Contact', `Hospital: ${clinic.name}\nPhone: ${clinic.phone}`);
+                    });
                   }}
                 >
                   <Text style={styles.triagePhoneIcon}>📞</Text>
@@ -2571,7 +2585,7 @@ export default function AgentScreenComponent() {
               contentContainerStyle={styles.subPageScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {CLINICS_DATA.map((clinic) => (
+              {clinicsList.map((clinic) => (
                 <View key={clinic.id} style={styles.clinicListCard}>
                   <View style={styles.clinicPinBox}>
                     <Text style={{ fontSize: 18 }}>📍</Text>
@@ -2582,17 +2596,20 @@ export default function AgentScreenComponent() {
                     <Text style={styles.clinicSubInfo}>
                       {clinic.distance} • <Text style={{ color: '#059669', fontWeight: '700' }}>{clinic.status}</Text>
                     </Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{clinic.address}</Text>
                   </View>
 
                   <TouchableOpacity
                     style={styles.clinicCallBtn}
                     activeOpacity={0.8}
                     onPress={() => {
-                      Alert.alert(
-                        `Call ${clinic.name}`,
-                        `Phone: ${clinic.phone}\nAddress: ${clinic.address}`,
-                        [{ text: 'Cancel', style: 'cancel' }, { text: 'Call Hospital' }]
-                      );
+                      const cleanPhone = clinic.phone.replace(/[^0-9+]/g, '');
+                      Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+                        Alert.alert(
+                          `Emergency Contact`,
+                          `Hospital: ${clinic.name}\nPhone: ${clinic.phone}\nAddress: ${clinic.address}`
+                        );
+                      });
                     }}
                   >
                     <Text style={styles.clinicCallIcon}>📞</Text>
@@ -2612,40 +2629,46 @@ export default function AgentScreenComponent() {
                 <View style={[styles.mapRadarCircle, { width: 230, height: 230, borderRadius: 115 }]} />
                 <View style={[styles.mapRadarCircle, { width: 120, height: 120, borderRadius: 60 }]} />
 
-                {/* Region Territory Labels */}
-                <Text style={[styles.mapTerritoryLabel, { top: 70, left: 35 }]}>Ikeja</Text>
-                <Text style={[styles.mapTerritoryLabel, { bottom: 140, left: 50 }]}>Alaba</Text>
-                <Text style={[styles.mapTerritoryLabel, { bottom: 120, right: 40 }]}>Ojota</Text>
+                {/* Region Territory Labels from live user city */}
+                <Text style={[styles.mapTerritoryLabel, { top: 70, left: 35 }]}>Live GPS</Text>
+                <Text style={[styles.mapTerritoryLabel, { bottom: 140, left: 50 }]}>{userLocationInfo.city.split(',')[0]}</Text>
+                <Text style={[styles.mapTerritoryLabel, { bottom: 120, right: 40 }]}>Verified</Text>
 
                 {/* Center User Location Dot */}
                 <View style={styles.mapUserDotOuter}>
                   <View style={styles.mapUserDotInner} />
                 </View>
 
-                {/* Hospital Pins */}
-                <TouchableOpacity
-                  style={[styles.mapHospitalPin, { top: 90, right: 80 }]}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedClinic(CLINICS_DATA[0])}
-                >
-                  <Text style={{ fontSize: 20 }}>🏥</Text>
-                </TouchableOpacity>
+                {/* Hospital Pins from live clinic list */}
+                {clinicsList[0] && (
+                  <TouchableOpacity
+                    style={[styles.mapHospitalPin, { top: 90, right: 80 }]}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedClinic(clinicsList[0])}
+                  >
+                    <Text style={{ fontSize: 20 }}>🏥</Text>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={[styles.mapHospitalPin, { top: 180, left: 70 }]}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedClinic(CLINICS_DATA[1])}
-                >
-                  <Text style={{ fontSize: 20 }}>🏥</Text>
-                </TouchableOpacity>
+                {clinicsList[1] && (
+                  <TouchableOpacity
+                    style={[styles.mapHospitalPin, { top: 180, left: 70 }]}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedClinic(clinicsList[1])}
+                  >
+                    <Text style={{ fontSize: 20 }}>🏥</Text>
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={[styles.mapHospitalPin, { bottom: 100, right: 120 }]}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedClinic(CLINICS_DATA[2])}
-                >
-                  <Text style={{ fontSize: 20 }}>🏥</Text>
-                </TouchableOpacity>
+                {clinicsList[2] && (
+                  <TouchableOpacity
+                    style={[styles.mapHospitalPin, { bottom: 100, right: 120 }]}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedClinic(clinicsList[2])}
+                  >
+                    <Text style={{ fontSize: 20 }}>🏥</Text>
+                  </TouchableOpacity>
+                )}
 
                 {/* Compass Navigation Fab */}
                 <View style={styles.mapCompassBtn}>
@@ -2654,53 +2677,53 @@ export default function AgentScreenComponent() {
               </View>
 
               {/* Bottom Selected Hospital Card */}
-              <View style={styles.mapBottomCard}>
-                <View style={styles.mapBottomCardTopRow}>
-                  <View style={styles.clinicPinBox}>
-                    <Text style={{ fontSize: 18 }}>📍</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.clinicName}>{selectedClinic.name}</Text>
-                    <Text style={styles.clinicSubInfo}>
-                      {selectedClinic.distance} •{' '}
-                      <Text style={{ color: '#059669', fontWeight: '700' }}>
-                        {selectedClinic.status}
+              {selectedClinic ? (
+                <View style={styles.mapBottomCard}>
+                  <View style={styles.mapBottomCardTopRow}>
+                    <View style={styles.clinicPinBox}>
+                      <Text style={{ fontSize: 18 }}>📍</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.clinicName}>{selectedClinic.name}</Text>
+                      <Text style={styles.clinicSubInfo}>
+                        {selectedClinic.distance} •{' '}
+                        <Text style={{ color: '#059669', fontWeight: '700' }}>
+                          {selectedClinic.status}
+                        </Text>
                       </Text>
-                    </Text>
+                    </View>
+                  </View>
+
+                  {/* Action Buttons: Get Directions & Call Hospital */}
+                  <View style={styles.mapActionRow}>
+                    <TouchableOpacity
+                      style={styles.mapDirectionBtn}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${selectedClinic.lat},${selectedClinic.lng}`;
+                        Linking.openURL(mapsUrl).catch(() => {
+                          Alert.alert('Directions', `Navigation to ${selectedClinic.name} (${selectedClinic.distance}) is ready.`);
+                        });
+                      }}
+                    >
+                      <Text style={styles.mapDirectionBtnText}>🧭 Get Directions</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.mapCallHospitalBtn}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        const cleanPhone = selectedClinic.phone.replace(/[^0-9+]/g, '');
+                        Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+                          Alert.alert(`Emergency Contact`, `Hospital: ${selectedClinic.name}\nPhone: ${selectedClinic.phone}`);
+                        });
+                      }}
+                    >
+                      <Text style={styles.mapCallHospitalBtnText}>📞 Call Hospital</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                {/* Action Buttons: Get Directions & Call Hospital */}
-                <View style={styles.mapActionRow}>
-                  <TouchableOpacity
-                    style={styles.mapDirectionBtn}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      Alert.alert(
-                        'Directions',
-                        `Turn-by-turn navigation to ${selectedClinic.name} (${selectedClinic.distance}) is active via GPS.`,
-                        [{ text: 'Start' }]
-                      );
-                    }}
-                  >
-                    <Text style={styles.mapDirectionBtnText}>🧭 Get Directions</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.mapCallHospitalBtn}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      Alert.alert(
-                        `Call ${selectedClinic.name}`,
-                        `Phone: ${selectedClinic.phone}`,
-                       [{ text: 'Cancel' }, { text: 'Call' }]
-                      );
-                    }}
-                  >
-                    <Text style={styles.mapCallHospitalBtnText}>📞 Call Hospital</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              ) : null}
             </View>
           )}
         </View>

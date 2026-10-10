@@ -133,7 +133,14 @@ export default function SentinelScreenComponent() {
 
   // Dynamic Live Telemetry from Render Backend
   const [liveFeed, setLiveFeed] = useState<FeedItem[]>([]);
-  const [clusters, setClusters] = useState<ThreatCluster[]>(THREAT_CLUSTERS);
+  const [clusters, setClusters] = useState<ThreatCluster[]>([]);
+  const [timelineEvents, setTimelineEvents] = useState<{
+    time: string;
+    location: string;
+    title: string;
+    anomaly: string | null;
+    dateLabel?: string;
+  }[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,24 +152,63 @@ export default function SentinelScreenComponent() {
 
         const suspiciousScans = feed.filter((f) => f.alarms && f.alarms.length > 0);
         if (suspiciousScans.length > 0) {
-          const latest = suspiciousScans[0];
-          const dynamicCluster: ThreatCluster = {
-            id: 'c-live-active',
-            name: 'Live Mobile Threat Ring, Lagos',
-            region: 'Lagos',
-            priority: 'High',
-            scansCount: suspiciousScans.length,
-            timeWindow: 'Live Active',
-            cloneIdentities: new Set(suspiciousScans.map((s) => s.code)).size,
-            locationsCount: 2,
-            productName: latest.product_name || `Threat Code: ${latest.code}`,
+          // Group suspicious scans by product
+          const groups: Record<string, FeedItem[]> = {};
+          suspiciousScans.forEach((scan) => {
+            const key = scan.product_name || `Item ${scan.code}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(scan);
+          });
+
+          const liveClusters: ThreatCluster[] = Object.entries(groups).map(([prodName, items], idx) => {
+            const uniqueDevices = new Set(items.map((i) => i.device_id || i.lat)).size;
+            const uniqueCodes = new Set(items.map((i) => i.code)).size;
+            const latestTime = items[0].timestamp
+              ? new Date(items[0].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Active';
+
+            return {
+              id: `c-live-${idx + 1}`,
+              name: `Threat Cluster • Node ${idx + 1}`,
+              region: 'Lagos',
+              priority: items.length >= 3 ? 'High' : 'Medium',
+              scansCount: items.length,
+              timeWindow: `Live Telemetry (${latestTime})`,
+              cloneIdentities: uniqueCodes,
+              locationsCount: Math.max(1, uniqueDevices),
+              productName: prodName,
+              coordinates: { x: 45 + ((idx * 14) % 40), y: 60 + ((idx * 10) % 25) },
+            };
+          });
+
+          setClusters(liveClusters);
+          setSelectedCluster((prev) => prev && liveClusters.find((c) => c.id === prev.id) ? prev : liveClusters[0]);
+
+          const dynamicTimeline = suspiciousScans.slice(0, 8).map((scan) => ({
+            time: scan.timestamp
+              ? new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Recent',
+            location: `Live Coordinates (${scan.lat.toFixed(3)}, ${scan.lng.toFixed(3)})`,
+            title: `Flagged: ${scan.product_name || scan.code}`,
+            anomaly: (scan.alarms || []).join(' • ') || 'Unverified Security Flag',
+          }));
+          setTimelineEvents(dynamicTimeline);
+        } else {
+          const defaultCluster: ThreatCluster = {
+            id: 'c-live-clean',
+            name: 'National Sentinel Grid',
+            region: 'Nigeria',
+            priority: 'Low',
+            scansCount: feed.length,
+            timeWindow: 'Live Active Grid',
+            cloneIdentities: 0,
+            locationsCount: Math.max(1, new Set(feed.map((f) => f.device_id)).size),
+            productName: 'Surveillance Active (No Threat Flags)',
             coordinates: { x: 55, y: 70 },
           };
-
-          setClusters([
-            dynamicCluster,
-            ...THREAT_CLUSTERS.filter((c) => c.id !== 'c-live-active'),
-          ]);
+          setClusters([defaultCluster]);
+          setSelectedCluster(defaultCluster);
+          setTimelineEvents([]);
         }
       } catch (err) {
         console.warn('Sentinel telemetry sync notice:', err);
@@ -640,34 +686,42 @@ export default function SentinelScreenComponent() {
             <View style={styles.timelineContainer}>
               <View style={styles.timelineVerticalLine} />
 
-              {TIMELINE_EVENTS.map((item, idx) => (
-                <View key={idx} style={styles.timelineEventRow}>
-                  {/* Timeline Dot */}
-                  <View style={[styles.timelineDot, item.anomaly ? styles.timelineDotRed : styles.timelineDotNormal]} />
+              {timelineEvents.length > 0 ? (
+                timelineEvents.map((item, idx) => (
+                  <View key={idx} style={styles.timelineEventRow}>
+                    {/* Timeline Dot */}
+                    <View style={[styles.timelineDot, item.anomaly ? styles.timelineDotRed : styles.timelineDotNormal]} />
 
-                  {/* Event Details Card */}
-                  <View style={styles.timelineEventCard}>
-                    <View style={styles.timelineTimeRow}>
-                      <Text style={styles.timelineTimeText}>{item.time}</Text>
-                      {item.dateLabel && (
-                        <View style={styles.timelineDateBadge}>
-                          <Text style={styles.timelineDateBadgeText}>{item.dateLabel}</Text>
+                    {/* Event Details Card */}
+                    <View style={styles.timelineEventCard}>
+                      <View style={styles.timelineTimeRow}>
+                        <Text style={styles.timelineTimeText}>{item.time}</Text>
+                        {item.dateLabel && (
+                          <View style={styles.timelineDateBadge}>
+                            <Text style={styles.timelineDateBadgeText}>{item.dateLabel}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text style={styles.timelineEventTitle}>{item.title}</Text>
+                      <Text style={styles.timelineLocationText}>{item.location}</Text>
+
+                      {item.anomaly && (
+                        <View style={styles.anomalyFlagBadge}>
+                          <Text style={styles.anomalyFlagIcon}>⚡</Text>
+                          <Text style={styles.anomalyFlagText}>{item.anomaly}</Text>
                         </View>
                       )}
                     </View>
-
-                    <Text style={styles.timelineEventTitle}>{item.title}</Text>
-                    <Text style={styles.timelineLocationText}>{item.location}</Text>
-
-                    {item.anomaly && (
-                      <View style={styles.anomalyFlagBadge}>
-                        <Text style={styles.anomalyFlagIcon}>⚡</Text>
-                        <Text style={styles.anomalyFlagText}>{item.anomaly}</Text>
-                      </View>
-                    )}
                   </View>
+                ))
+              ) : (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 14 }}>
+                    No anomalous scans in current telemetry horizon.
+                  </Text>
                 </View>
-              ))}
+              )}
             </View>
 
             {/* Jump to Dossier Button */}
@@ -716,43 +770,45 @@ export default function SentinelScreenComponent() {
             {/* Case Dossier Card */}
             <View style={styles.dossierMainCard}>
               <View style={styles.dossierCaseHeader}>
-                <Text style={styles.dossierCaseId}>Case #SN-2048</Text>
+                <Text style={styles.dossierCaseId}>Case #{selectedCluster.id.toUpperCase()}</Text>
                 <View style={styles.dossierConfidencePill}>
-                  <Text style={styles.dossierConfidenceText}>● High Confidence</Text>
+                  <Text style={styles.dossierConfidenceText}>
+                    {selectedCluster.priority === 'High' ? '● High Priority Alert' : '● Sentinel Surveillance'}
+                  </Text>
                 </View>
               </View>
 
               {/* Data Table */}
               <View style={styles.dossierDataRow}>
                 <Text style={styles.dossierDataLabel}>Product</Text>
-                <Text style={styles.dossierDataValue}>Paracetamol 500mg</Text>
+                <Text style={styles.dossierDataValue}>{selectedCluster.productName}</Text>
               </View>
 
               <View style={styles.dossierDataRow}>
-                <Text style={styles.dossierDataLabel}>Manufacturer</Text>
-                <Text style={styles.dossierDataValue}>Generic Pharma Ltd.</Text>
+                <Text style={styles.dossierDataLabel}>Cluster Area</Text>
+                <Text style={styles.dossierDataValue}>{selectedCluster.name}</Text>
               </View>
 
               <View style={styles.dossierDataRow}>
-                <Text style={styles.dossierDataLabel}>Threat</Text>
+                <Text style={styles.dossierDataLabel}>Threat Status</Text>
                 <Text style={[styles.dossierDataValue, { color: '#DC2626' }]}>
-                  Suspected cloned product identity
+                  {selectedCluster.scansCount > 0 ? 'Suspected Counterfeit / Cloned Serial' : 'Grid Active (Nominal)'}
                 </Text>
               </View>
 
               <View style={styles.dossierDataRow}>
                 <Text style={styles.dossierDataLabel}>Time Window</Text>
-                <Text style={styles.dossierDataValue}>17 scans over 48 hours</Text>
+                <Text style={styles.dossierDataValue}>{selectedCluster.timeWindow}</Text>
               </View>
 
               <View style={styles.dossierDataRow}>
-                <Text style={styles.dossierDataLabel}>Locations</Text>
-                <Text style={styles.dossierDataValue}>5 unique locations</Text>
+                <Text style={styles.dossierDataLabel}>Total Detections</Text>
+                <Text style={styles.dossierDataValue}>{selectedCluster.scansCount} scans recorded</Text>
               </View>
 
               <View style={[styles.dossierDataRow, { borderBottomWidth: 0 }]}>
                 <Text style={styles.dossierDataLabel}>Clone Identities</Text>
-                <Text style={styles.dossierDataValue}>3 linked identities</Text>
+                <Text style={styles.dossierDataValue}>{selectedCluster.cloneIdentities} flagged codes</Text>
               </View>
 
               {/* Key Findings Section */}

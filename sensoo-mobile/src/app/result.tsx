@@ -172,11 +172,7 @@ export default function ResultScreen() {
       return params.scenario as ScenarioType;
     }
     const code = (params.code || '').toUpperCase();
-    if (code.includes('FAKE') || code === 'SNS-FAKE-0000') return 'COUNTERFEIT';
-    if (code.includes('8832') || code === 'SNS-MED-8832') return 'ALREADY_PURCHASED';
-    if (code.includes('SPEED') || code.includes('PHYSICS') || code === 'SNS-SPEED-9999')
-      return 'IMPOSSIBLE_TRAVEL';
-    if (code.includes('1099') || code === 'SNS-BABY-1099') return 'WRONG_REGION';
+    if (code.includes('FAKE') || code.includes('UNVERIFIED')) return 'COUNTERFEIT';
     return 'AUTHENTIC';
   };
 

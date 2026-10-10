@@ -16,7 +16,7 @@ export interface SensooAiResponse {
   modelUsed: string;
   languageUsed?: string;
   intent?: 'VERIFY' | 'MEDICAL_SAFETY' | 'REPORT' | 'GENERAL';
-  action?: 'SCAN' | 'REPORT' | 'NONE';
+  action?: 'SCAN' | 'REPORT' | 'CLINICS' | 'NONE';
   reportArgs?: {
     productName?: string;
     location?: string;
@@ -208,6 +208,19 @@ async function callGeminiModel(
               description: 'Opens the barcode scanner hardware. Call this when the user asks to check, scan, or verify a physical product they are holding.'
             },
             {
+              name: 'find_nearby_clinics',
+              description: 'Searches and displays live verified clinics, hospitals, or emergency emergency medical centers. Call this when the user asks for nearby clinics, asks where to get medical help, or reports feeling sick or injured from a product.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  urgency: {
+                    type: 'STRING',
+                    description: 'Urgency level: emergency, high, or routine.'
+                  }
+                }
+              }
+            },
+            {
               name: 'submit_fraud_report',
               description: 'Submits an official counterfeit fraud incident report to NAFDAC Sentinel surveillance. Call this when the user asks to report a fake, counterfeit, cloned product or a suspicious vendor/location.',
               parameters: {
@@ -255,6 +268,12 @@ async function callGeminiModel(
   if (candidatePart.functionCall) {
     if (candidatePart.functionCall.name === 'trigger_camera_scan') {
       return { reply: "Opening the scanner for you now...", action: 'SCAN' };
+    }
+    if (candidatePart.functionCall.name === 'find_nearby_clinics') {
+      return {
+        reply: "Locating verified medical facilities near your current coordinates right now...",
+        action: 'CLINICS',
+      };
     }
     if (candidatePart.functionCall.name === 'submit_fraud_report') {
       const args = candidatePart.functionCall.args || {};
