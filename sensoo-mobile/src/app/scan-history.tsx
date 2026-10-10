@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getCurrentUserLocation } from '../services/clinicService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -22,6 +23,16 @@ export default function ScanHistoryScreen() {
     imageUrl?: string;
   }>();
 
+  const [currentCity, setCurrentCity] = useState('Current Location');
+
+  useEffect(() => {
+    getCurrentUserLocation().then((loc) => {
+      if (loc.city && loc.city !== 'Current Location') {
+        setCurrentCity(loc.city);
+      }
+    });
+  }, []);
+
   const productName = params.name || (params.code ? `Product (${params.code})` : 'Scanned Product');
   const barcode = params.code || 'UNLISTED';
   const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -30,7 +41,7 @@ export default function ScanHistoryScreen() {
     {
       id: 't1',
       time: `Today, ${now}`,
-      location: 'Lagos, Nigeria',
+      location: currentCity,
       status: 'Scanned',
     },
     {
@@ -42,7 +53,7 @@ export default function ScanHistoryScreen() {
     {
       id: 't3',
       time: 'Yesterday',
-      location: 'Lagos, Nigeria',
+      location: 'Kano, Nigeria',
       status: 'Scanned',
     },
     {

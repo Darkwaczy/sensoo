@@ -44,7 +44,7 @@ You understand Nigerian cultural context, local market geography (Idumota, Balog
 Your responsibilities:
 1. Explain scan results in clear, caring, non-technical language.
 2. If the user selects or speaks in Nigerian Pidgin, Yorùbá, Hausa, or Igbo, reply authentically and fluently in that exact Nigerian language using N-ATLaS linguistic idioms.
-3. If counterfeit medicine or cosmetics are ingested/applied, prioritize clinical safety and urge immediate evaluation at accredited clinics (LUTH Surulere, Reddington Hospital, Ikeja General, or emergency 112).
+3. If counterfeit medicine or cosmetics are ingested/applied, prioritize clinical safety and urge immediate evaluation at the nearest accredited clinic, health center, or emergency 112.
 4. If suspicious distribution is reported, confirm that an incident dossier is being dispatched to NAFDAC Sentinel threat clusters.
 5. Keep answers concise, highly readable on mobile screens, and actionable.
 6. DO NOT use markdown formatting (like **bold** or *italics* asterisks). Output plain conversational text only.
@@ -72,7 +72,7 @@ export async function sendAgentMessage(
   // System instruction / Context
   let contextualPrefix = '';
   if (contextData?.productName || contextData?.scannedCode || contextData?.scenario) {
-    contextualPrefix = `[Active Context: Product="${contextData.productName || 'Unknown'}", Code="${contextData.scannedCode || 'N/A'}", Status="${contextData.scenario || 'UNKNOWN'}", Location="${contextData.userLocation || 'Lagos, Nigeria'}", Language="${targetLang}"]\n`;
+    contextualPrefix = `[Active Context: Product="${contextData.productName || 'Unknown'}", Code="${contextData.scannedCode || 'N/A'}", Status="${contextData.scenario || 'UNKNOWN'}", Location="${contextData.userLocation || 'Current Location'}", Language="${targetLang}"]\n`;
   }
 
   if (isNigerianVernacular) {
@@ -318,7 +318,7 @@ function generateLocalizedSmartReply(
     if (lower.includes('took') || lower.includes('swallow') || lower.includes('drink') || lower.includes('sick')) {
       return {
         success: true,
-        reply: `🚨 OYA LISTEN: If you don already drink this ${prod}, stop am immediately! Drink plenty clean water. If your eye dey turn you or belle dey pain you, sharp-sharp make you go LUTH hospital for Surulere or call 112 emergency now-now.`,
+        reply: `🚨 OYA LISTEN: If you don already drink this ${prod}, stop am immediately! Drink plenty clean water. If your eye dey turn you or belle dey pain you, sharp-sharp make you go nearest hospital or clinic near you or call 112 emergency now-now.`,
         modelUsed: `${SOVEREIGN_NATLAS_MODEL} (Local)`,
         languageUsed: 'Pidgin',
         intent: 'MEDICAL_SAFETY',
@@ -345,7 +345,7 @@ function generateLocalizedSmartReply(
     }
     return {
       success: true,
-      reply: `🚨 IKILỌ PATAKI: Ti ẹ ba ti mu oogun yi, ẹ da duro lẹsẹkẹsẹ. Ẹ mu omi mimọ pupọ. Ti ara ba n yi yin tabi ti inu n run yin, ẹ tete lọ si ile-iwosan LUTH to wa nitosi tabi pe 112 fun iranlọwọ lẹsẹkẹsẹ.`,
+      reply: `🚨 IKILỌ PATAKI: Ti ẹ ba ti mu oogun yi, ẹ da duro lẹsẹkẹsẹ. Ẹ mu omi mimọ pupọ. Ti ara ba n yi yin tabi ti inu n run yin, ẹ tete lọ si ile-iwosan to wa nitosi yin tabi pe 112 fun iranlọwọ lẹsẹkẹsẹ.`,
       modelUsed: `${SOVEREIGN_NATLAS_MODEL} (Local)`,
       languageUsed: 'Yorùbá',
       intent: 'MEDICAL_SAFETY',
@@ -367,7 +367,7 @@ function generateLocalizedSmartReply(
   if (language === 'Igbo') {
     return {
       success: true,
-      reply: `⚠️ Ọgwụ a (${prod}) bụ adịgboroja. Ihe ndekọ ya adabaghị na NAFDAC. Biko anụla ya ma ọ bụ ree ya. Ọ bụrụ na ị lara ya, gbaga n'ụlọ ọgwụ LUTH ozugbo ma ọ bụ kpọọ 112.`,
+      reply: `⚠️ Ọgwụ a (${prod}) bụ adịgboroja. Ihe ndekọ ya adabaghị na NAFDAC. Biko anụla ya ma ọ bụ ree ya. Ọ bụrụ na ị lara ya, gbaga n'ụlọ ọgwụ kacha nso ozugbo ma ọ bụ kpọọ 112.`,
       modelUsed: `${SOVEREIGN_NATLAS_MODEL} (Local)`,
       languageUsed: 'Igbo',
       intent: 'MEDICAL_SAFETY',
@@ -377,7 +377,7 @@ function generateLocalizedSmartReply(
   // Standard English
   return {
     success: true,
-    reply: `⚠️ ${prod} was flagged as counterfeit. Serial number and batch telemetry do not match authorized manufacturer records in the NAFDAC database. Do not consume or sell. If ingested, drink clean water and seek medical attention at the nearest accredited clinic (LUTH, Reddington, or call 112).`,
+    reply: `⚠️ ${prod} was flagged as counterfeit. Serial number and batch telemetry do not match authorized manufacturer records in the NAFDAC database. Do not consume or sell. If ingested, drink clean water and seek medical attention at the nearest accredited clinic or call emergency 112.`,
     modelUsed: `${PRIMARY_MODEL} (Safe Cache)`,
     languageUsed: 'English',
     intent: 'VERIFY',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { getCurrentUserLocation } from '../services/clinicService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -178,6 +179,15 @@ export default function ResultScreen() {
 
   const [activeScenario, setActiveScenario] = useState<ScenarioType>(getInitialScenario);
   const baseConfig = SCENARIOS[activeScenario];
+  const [userCity, setUserCity] = useState('Current Location');
+
+  useEffect(() => {
+    getCurrentUserLocation().then((loc) => {
+      if (loc.city && loc.city !== 'Current Location') {
+        setUserCity(loc.city);
+      }
+    });
+  }, []);
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -385,7 +395,7 @@ export default function ResultScreen() {
                 <View style={styles.travelPointRow}>
                   <View style={styles.travelRedDot} />
                   <View style={{ marginLeft: 8 }}>
-                    <Text style={styles.travelLocName}>Lagos, Nigeria</Text>
+                    <Text style={styles.travelLocName}>{userCity}</Text>
                     <Text style={styles.travelLocTime}>{`Today, ${nowTime}`}</Text>
                   </View>
                 </View>
@@ -415,7 +425,7 @@ export default function ResultScreen() {
                 resizeMode="cover"
               />
               <View style={styles.mapPinLagosTag}>
-                <Text style={styles.mapPinTagText}>{`📍 Lagos · ${nowTime}`}</Text>
+                <Text style={styles.mapPinTagText}>{`📍 ${userCity.split(',')[0]} · ${nowTime}`}</Text>
               </View>
               <View style={styles.mapPinAbujaTag}>
                 <Text style={styles.mapPinTagText}>📍 Abuja · Clone Detected</Text>
@@ -494,7 +504,7 @@ export default function ResultScreen() {
               <View style={styles.timelineRow}>
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={styles.timelineLoc}>Lagos, Nigeria</Text>
+                  <Text style={styles.timelineLoc}>{userCity}</Text>
                   <Text style={styles.timelineTime}>Today, {nowTime}</Text>
                 </View>
               </View>

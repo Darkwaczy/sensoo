@@ -26,6 +26,7 @@ import {
 } from 'expo-audio';
 import { sendAgentMessage } from '../services/sensooAiService';
 import { fetchLiveFeed } from '../services/sensooApiService';
+import { getCurrentUserLocation } from '../services/clinicService';
 import {
   getVoiceAssistantSettings,
   subscribeVoiceAssistantSettings,
@@ -134,6 +135,15 @@ export default function HomeScreen() {
   const [recentScans, setRecentScans] = useState<RecentScanItem[]>(RECENT_SCANS_DATA);
   const [verifiedProducts, setVerifiedProducts] = useState<VerifiedProductItem[]>(VERIFIED_PRODUCTS_DATA);
   const [alerts, setAlerts] = useState<AlertItem[]>(ALERTS_DATA);
+  const [userCity, setUserCity] = useState('Current Location');
+
+  useEffect(() => {
+    getCurrentUserLocation().then((loc) => {
+      if (loc.city && loc.city !== 'Current Location') {
+        setUserCity(loc.city);
+      }
+    });
+  }, []);
 
   // Real-time synchronization with live backend scans feed
   useEffect(() => {
@@ -504,7 +514,7 @@ export default function HomeScreen() {
         productName: latestItem ? latestItem.name.replace('\n', ' ') : undefined,
         scannedCode: latestItem ? latestItem.barcode : undefined,
         scenario: latestItem ? (latestItem.scenario || 'AUTHENTIC') : undefined,
-        userLocation: 'Lagos, Nigeria',
+        userLocation: userCity,
       });
       setAgentChat((prev) => [...prev, { sender: 'agent', text: res.reply }]);
     } catch {
@@ -1535,7 +1545,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Registered Region</Text>
-                <Text style={styles.modalInfoValue}>Lagos, Nigeria</Text>
+                <Text style={styles.modalInfoValue}>{userCity}</Text>
               </View>
             </View>
 
@@ -1897,7 +1907,7 @@ export default function HomeScreen() {
             >
               {[
                 'How to verify authentic medicine?',
-                'Find nearby clinics in Lagos',
+                'Find nearby clinics & pharmacies',
                 'How to spot fake cosmetics?',
                 'Report a suspicious pharmacy',
               ].map((suggestion) => (

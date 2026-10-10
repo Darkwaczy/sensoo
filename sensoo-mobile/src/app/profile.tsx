@@ -18,6 +18,7 @@ import {
   subscribeVoiceAssistantSettings,
   VoiceAssistantSettings,
 } from '../services/voiceAssistantService';
+import { getCurrentUserLocation } from '../services/clinicService';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,6 +27,15 @@ export default function ProfileScreen() {
   const [showPersonalInfoModal, setShowPersonalInfoModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [userCity, setUserCity] = useState('Current Location');
+
+  useEffect(() => {
+    getCurrentUserLocation().then((loc) => {
+      if (loc.city && loc.city !== 'Current Location') {
+        setUserCity(loc.city);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeVoiceAssistantSettings((s) => setVoiceSettings(s));
@@ -325,7 +335,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Registered Region</Text>
-                <Text style={styles.modalInfoValue}>Lagos, Nigeria</Text>
+                <Text style={styles.modalInfoValue}>{userCity}</Text>
               </View>
             </View>
             <TouchableOpacity

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,22 +13,33 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getCurrentUserLocation } from '../services/clinicService';
 
 export default function LocationRegionScreen() {
   const router = useRouter();
 
-  const [currentCity, setCurrentCity] = useState('Lagos');
+  const [currentCity, setCurrentCity] = useState('Current Location');
   const [useCurrentLocation, setUseCurrentLocation] = useState(true);
+
+  useEffect(() => {
+    if (useCurrentLocation) {
+      getCurrentUserLocation().then((loc) => {
+        if (loc.city && loc.city !== 'Current Location') {
+          setCurrentCity(loc.city);
+        }
+      });
+    }
+  }, [useCurrentLocation]);
 
   const handleChangeLocation = () => {
     Alert.alert(
       'Change Location',
       'Select a verified region in Nigeria:',
       [
-        { text: 'Lagos, Nigeria', onPress: () => setCurrentCity('Lagos') },
+        { text: 'Lagos State', onPress: () => setCurrentCity('Lagos') },
         { text: 'Abuja (FCT)', onPress: () => setCurrentCity('Abuja') },
         { text: 'Port Harcourt (Rivers)', onPress: () => setCurrentCity('Port Harcourt') },
-        { text: 'Eket (Akwa Ibom)', onPress: () => setCurrentCity('Eket') },
+        { text: 'Kano State', onPress: () => setCurrentCity('Kano') },
         { text: 'Cancel', style: 'cancel' },
       ]
     );

@@ -162,7 +162,7 @@ const getScanResultCardData = (scenario: string, scanCode: string, productName: 
         { label: 'Product', value: resolvedName },
         { label: 'Barcode', value: resolvedCode },
         { label: 'Intended Territory', value: 'Unauthorized Regional Diversion' },
-        { label: 'Current Location', value: 'Lagos, Nigeria' },
+        { label: 'Current Location', value: 'Current Region' },
       ],
       calloutText: 'Scan detected in Nigeria, but authorized distribution territory differs. Unauthorized regional diversion.',
       calloutType: 'warning',
@@ -245,10 +245,10 @@ export default function AgentScreenComponent() {
   const [clinicViewMode, setClinicViewMode] = useState<'list' | 'map'>('list');
   const [clinicsList, setClinicsList] = useState<ClinicData[]>([]);
   const [selectedClinic, setSelectedClinic] = useState<ClinicData | null>(null);
-  const [userLocationInfo, setUserLocationInfo] = useState<{ lat: number; lng: number; city: string }>({
-    lat: 6.5244,
-    lng: 3.3792,
-    city: 'Lagos, Nigeria',
+  const [userLocationInfo, setUserLocationInfo] = useState<{ lat: number | null; lng: number | null; city: string }>({
+    lat: null,
+    lng: null,
+    city: 'Current Location',
   });
 
   const contextProductName =
@@ -259,7 +259,7 @@ export default function AgentScreenComponent() {
 
   // Report Form state
   const [reportProductName, setReportProductName] = useState(contextProductName);
-  const [reportLocation, setReportLocation] = useState('Lagos, Nigeria');
+  const [reportLocation, setReportLocation] = useState('Current Location');
   const [reportDetails, setReportDetails] = useState('');
   const [reportPhotoAttached, setReportPhotoAttached] = useState(false);
 
@@ -269,13 +269,15 @@ export default function AgentScreenComponent() {
       if (!isMounted) return;
       setUserLocationInfo({ lat: loc.lat, lng: loc.lng, city: loc.city });
       setReportLocation(loc.city);
-      getNearbyClinics(loc.lat, loc.lng).then((list) => {
-        if (!isMounted) return;
-        setClinicsList(list);
-        if (list.length > 0) {
-          setSelectedClinic(list[0]);
-        }
-      });
+      if (loc.lat !== null && loc.lng !== null) {
+        getNearbyClinics(loc.lat, loc.lng).then((list) => {
+          if (!isMounted) return;
+          setClinicsList(list);
+          if (list.length > 0) {
+            setSelectedClinic(list[0]);
+          }
+        });
+      }
     });
     return () => {
       isMounted = false;
@@ -545,7 +547,7 @@ export default function AgentScreenComponent() {
           productName: activeProd,
           scannedCode: activeCode,
           scenario: activeScenario,
-          userLocation: 'Lagos, Nigeria',
+          userLocation: userLocationInfo.city,
           language: selectedLanguage,
         }
       );
@@ -909,7 +911,7 @@ export default function AgentScreenComponent() {
           productName: activeProd,
           scannedCode: activeCode,
           scenario: activeScenario,
-          userLocation: 'Lagos, Nigeria',
+          userLocation: userLocationInfo.city,
           language: selectedLanguage,
         }
       );
@@ -925,7 +927,7 @@ export default function AgentScreenComponent() {
         });
         setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 1200);
       } else if (res.action === 'CLINICS' || lowerQ.includes('clinic') || lowerQ.includes('hospital') || lowerQ.includes('emergency')) {
-        const liveNearby = clinicsList.length > 0 ? clinicsList : await getNearbyClinics(userLocationInfo.lat, userLocationInfo.lng);
+        const liveNearby = clinicsList.length > 0 ? clinicsList : await getNearbyClinics(userLocationInfo.lat ?? undefined, userLocationInfo.lng ?? undefined);
         appendChatMessage({
           sender: 'agent',
           text: res.reply || 'Here are the closest verified emergency medical facilities to your live GPS coordinates:',
@@ -1252,7 +1254,11 @@ export default function AgentScreenComponent() {
                             </View>
                             <View style={[styles.chatReportRow, styles.chatReportRowBorder]}>
                               <Text style={styles.chatReportLabel}>GPS Telemetry</Text>
-                              <Text style={styles.chatReportVal}>6.4698° N, 3.3852° E (Lagos)</Text>
+                              <Text style={styles.chatReportVal}>
+                                {userLocationInfo.lat
+                                  ? `${userLocationInfo.lat.toFixed(4)}° N, ${userLocationInfo.lng?.toFixed(4)}° E (${userLocationInfo.city})`
+                                  : userLocationInfo.city}
+                              </Text>
                             </View>
                             <View style={[styles.chatReportRow, styles.chatReportRowBorder]}>
                               <Text style={styles.chatReportLabel}>Investigation Status</Text>
@@ -1981,7 +1987,7 @@ export default function AgentScreenComponent() {
                   onPress={() =>
                     handleVoicePrompt(
                       selectedLanguage === 'Nigerian Pidgin'
-                        ? 'Where verified pharmacy or clinic dey near me for Lagos?'
+                        ? 'Where verified pharmacy or clinic dey near me?'
                         : 'Where can I find verified medical help or safe replacement nearby?'
                     )
                   }
@@ -2242,7 +2248,16 @@ export default function AgentScreenComponent() {
               style={styles.triageDirectionsBtn}
               activeOpacity={0.88}
               onPress={() => {
-                Alert.alert('Directions', 'Routing to Lagos University Teaching Hospital (4.2 km)...');
+                const nearest = clinicsList[0];
+                if (nearest && nearest.lat && nearest.lng) {
+                  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${nearest.lat},${nearest.lng}`).catch(() => {
+                    Alert.alert('Directions', `Routing to ${nearest.name} (${nearest.distance})...`);
+                  });
+                } else if (nearest) {
+                  Alert.alert('Directions', `Routing to ${nearest.name} (${nearest.distance})...`);
+                } else {
+                  Alert.alert('Directions', 'Locating nearest healthcare facility via GPS...');
+                }
               }}
             >
               <Text style={styles.triageDirectionsIcon}>🧭</Text>
@@ -2255,10 +2270,12 @@ export default function AgentScreenComponent() {
                 style={styles.triageSubOutlineBtn}
                 activeOpacity={0.8}
                 onPress={() => {
-                  Alert.alert('Emergency Contact', 'Dialing Emergency Hospital line (+234 1 774 2000)...', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Call Now' },
-                  ]);
+                  const nearest = clinicsList[0];
+                  const phoneNum = nearest?.phone || '112';
+                  const cleanPhone = phoneNum.replace(/[^0-9+]/g, '');
+                  Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+                    Alert.alert('Emergency Contact', `Dialing ${nearest?.name || 'Emergency'} (${phoneNum})`);
+                  });
                 }}
               >
                 <Text style={styles.triageSubBtnIcon}>📞</Text>
@@ -2272,8 +2289,8 @@ export default function AgentScreenComponent() {
                   router.push({
                     pathname: '/report-product',
                     params: {
-                      name: 'Paracetamol 500mg',
-                      code: '8992772531003',
+                      name: contextProductName,
+                      code: contextScanCode,
                     },
                   });
                 }}
@@ -2484,7 +2501,7 @@ export default function AgentScreenComponent() {
             <View style={styles.specDivider} />
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Location</Text>
-              <Text style={styles.specValue}>Lagos, Nigeria</Text>
+              <Text style={styles.specValue}>{userLocationInfo.city}</Text>
             </View>
           </View>
 
@@ -2794,7 +2811,7 @@ export default function AgentScreenComponent() {
               <Text style={styles.formLabel}>Where did you get it?</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="e.g. Idumota Market, Lagos"
+                placeholder="e.g. Local store, street, or pharmacy address"
                 placeholderTextColor="#94A3B8"
                 value={reportLocation}
                 onChangeText={setReportLocation}

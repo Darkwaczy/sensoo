@@ -12,60 +12,7 @@ export interface ClinicData {
   lng: number;
 }
 
-// Verified emergency and teaching hospitals in Nigeria with authentic hotlines
-const VERIFIED_NIGERIAN_CENTERS = [
-  {
-    name: 'Lagos University Teaching Hospital (LUTH)',
-    address: 'Ishaga Rd, Idi-Araba, Surulere, Lagos',
-    phone: '+234 1 774 2000',
-    lat: 6.5181,
-    lng: 3.3547,
-  },
-  {
-    name: 'Reddington Multi-Specialist Hospital',
-    address: '12 Idowu Martins St, Victoria Island, Lagos',
-    phone: '+234 1 271 5340',
-    lat: 6.4281,
-    lng: 3.4219,
-  },
-  {
-    name: 'Lagos State University Teaching Hospital (LASUTH)',
-    address: '1-5 Oba Akinjobi Way, GRA, Ikeja, Lagos',
-    phone: '+234 1 497 0000',
-    lat: 6.5912,
-    lng: 3.3524,
-  },
-  {
-    name: 'St. Nicholas Hospital',
-    address: '57 Campbell St, Lagos Island, Lagos',
-    phone: '+234 1 460 3000',
-    lat: 6.4531,
-    lng: 3.3958,
-  },
-  {
-    name: 'National Hospital Abuja',
-    address: 'Plot 132 Central District Phase II, Garki, Abuja',
-    phone: '+234 9 290 3266',
-    lat: 9.0435,
-    lng: 7.4648,
-  },
-  {
-    name: 'University College Hospital (UCH) Ibadan',
-    address: 'Queen Elizabeth II Rd, Agodi, Ibadan, Oyo',
-    phone: '+234 2 241 0088',
-    lat: 7.4042,
-    lng: 3.9056,
-  },
-  {
-    name: 'LASAMBUS / Emergency Medical Dispatch',
-    address: 'Toll-free National Emergency Dispatch, Nigeria',
-    phone: '112',
-    lat: 6.5244,
-    lng: 3.3792,
-  },
-];
-
-// Haversine formula to compute true distance between two coordinates in km
+// Haversine formula to compute true physical distance between two coordinates in km
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -81,25 +28,26 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 /**
- * Get the user's current GPS location, or fallback to default coordinates if permissions denied
+ * Get the user's real GPS coordinates from the device hardware.
+ * Strictly uses device location without hardcoding any default city.
  */
 export async function getCurrentUserLocation(): Promise<{
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   city: string;
   hasPermission: boolean;
 }> {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      return { lat: 6.5244, lng: 3.3792, city: 'Lagos, Nigeria', hasPermission: false };
+      return { lat: null, lng: null, city: 'Current Location', hasPermission: false };
     }
 
     const pos = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
 
-    let city = 'Lagos, Nigeria';
+    let detectedCity = 'Current Location';
     try {
       const geo = await Location.reverseGeocodeAsync({
         latitude: pos.coords.latitude,
@@ -107,46 +55,52 @@ export async function getCurrentUserLocation(): Promise<{
       });
       if (geo && geo.length > 0) {
         const place = geo[0];
-        city = [place.city || place.subregion || place.district, place.region || place.country]
-          .filter(Boolean)
-          .join(', ');
+        const parts = [
+          place.city || place.subregion || place.district,
+          place.region || place.country,
+        ].filter(Boolean);
+        if (parts.length > 0) {
+          detectedCity = parts.join(', ');
+        }
       }
     } catch {
-      // Reverse geocoding optional
+      // Reverse geocode optional
     }
 
     return {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
-      city: city || 'Nigeria',
+      city: detectedCity,
       hasPermission: true,
     };
   } catch (err) {
-    console.warn('Location resolution fallback:', err);
-    return { lat: 6.5244, lng: 3.3792, city: 'Lagos, Nigeria', hasPermission: false };
+    console.warn('GPS location resolution notice:', err);
+    return { lat: null, lng: null, city: 'Current Location', hasPermission: false };
   }
 }
 
 /**
- * Query real healthcare facilities near the user's live coordinates.
- * Tries live OpenStreetMap Overpass query first; merges with verified Nigerian hospitals,
- * then sorts by real calculated GPS distance.
+ * Query real healthcare facilities near the user's live GPS coordinates via live OpenStreetMap / Overpass.
+ * Zero hardcoded clinics. Every result is resolved live from global geo-spatial databases.
  */
 export async function getNearbyClinics(userLat?: number, userLng?: number): Promise<ClinicData[]> {
   let lat = userLat;
   let lng = userLng;
 
-  if (lat === undefined || lng === undefined) {
+  if (lat === undefined || lng === undefined || lat === null || lng === null) {
     const loc = await getCurrentUserLocation();
+    if (loc.lat === null || loc.lng === null) {
+      return [];
+    }
     lat = loc.lat;
     lng = loc.lng;
   }
 
   const liveFacilities: ClinicData[] = [];
 
-  // Attempt live Overpass API query (radius: 12km)
+  // Query OpenStreetMap Overpass live API (Search radius: 15km)
   try {
-    const overpassQuery = `[out:json][timeout:6];(node["amenity"="hospital"](around:12000,${lat},${lng});node["amenity"="clinic"](around:12000,${lat},${lng}););out body 6;`;
+    const overpassQuery = `[out:json][timeout:8];(node["amenity"="hospital"](around:15000,${lat},${lng});node["amenity"="clinic"](around:15000,${lat},${lng});node["healthcare"="hospital"](around:15000,${lat},${lng});node["healthcare"="centre"](around:15000,${lat},${lng}););out body 8;`;
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       body: overpassQuery,
@@ -161,14 +115,14 @@ export async function getNearbyClinics(userLat?: number, userLng?: number): Prom
           const name = tags.name || tags['name:en'] || tags.operator;
           if (name) {
             const dist = calculateDistanceKm(lat, lng, el.lat, el.lon);
-            const phone = tags.phone || tags['contact:phone'] || tags['emergency:phone'] || '+234 1 774 2000';
-            const street = tags['addr:street'] || tags['addr:city'] || 'Emergency Medical Service';
+            const phone = tags.phone || tags['contact:phone'] || tags['emergency:phone'] || '112';
+            const street = [tags['addr:street'], tags['addr:city']].filter(Boolean).join(', ') || 'Medical Facility';
             liveFacilities.push({
               id: `osm-${el.id}`,
               name,
               distance: `${dist.toFixed(1)} km`,
               distanceKm: dist,
-              status: tags.opening_hours === '24/7' ? 'Open 24 hours' : 'Emergency Unit Active',
+              status: tags.opening_hours === '24/7' ? 'Open 24 hours' : 'Emergency Center',
               phone,
               address: street,
               lat: el.lat,
@@ -179,38 +133,46 @@ export async function getNearbyClinics(userLat?: number, userLng?: number): Prom
       }
     }
   } catch (err) {
-    console.warn('Overpass API query bypassed, using verified national medical registry:', err);
+    console.warn('Live Overpass query notice:', err);
   }
 
-  // Calculate real distances for verified registry hospitals
-  const fallbackFacilities: ClinicData[] = VERIFIED_NIGERIAN_CENTERS.map((c, idx) => {
-    const dist = calculateDistanceKm(lat!, lng!, c.lat, c.lng);
-    return {
-      id: `nat-${idx + 1}`,
-      name: c.name,
-      distance: `${dist.toFixed(1)} km`,
-      distanceKm: dist,
-      status: 'Open 24 hours',
-      phone: c.phone,
-      address: c.address,
-      lat: c.lat,
-      lng: c.lng,
-    };
-  });
+  // If Overpass returned results, sort by real distance
+  if (liveFacilities.length > 0) {
+    liveFacilities.sort((a, b) => a.distanceKm - b.distanceKm);
+    return liveFacilities.slice(0, 6);
+  }
 
-  // Combine live Overpass results with verified hospitals, remove duplicates, and sort by distance
-  const combined = [...liveFacilities, ...fallbackFacilities];
-  const uniqueNames = new Set<string>();
-  const results: ClinicData[] = [];
-
-  for (const item of combined) {
-    const norm = item.name.toLowerCase().trim();
-    if (!uniqueNames.has(norm)) {
-      uniqueNames.add(norm);
-      results.push(item);
+  // Backup live query via Nominatim OSM for hospitals near coordinates
+  try {
+    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=hospital&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1&limit=6`;
+    const nomRes = await fetch(nomUrl, {
+      headers: { 'User-Agent': 'SensooApp/1.0 (Hackathon Verification Engine)' },
+    });
+    if (nomRes.ok) {
+      const items = await nomRes.json();
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          const itemLat = parseFloat(item.lat);
+          const itemLon = parseFloat(item.lon);
+          const dist = calculateDistanceKm(lat, lng, itemLat, itemLon);
+          liveFacilities.push({
+            id: `nom-${item.place_id}`,
+            name: item.name || item.display_name.split(',')[0],
+            distance: `${dist.toFixed(1)} km`,
+            distanceKm: dist,
+            status: 'Verified Health Facility',
+            phone: '112',
+            address: item.display_name.split(',').slice(1, 3).join(',').trim(),
+            lat: itemLat,
+            lng: itemLon,
+          });
+        }
+      }
     }
+  } catch (err) {
+    console.warn('Nominatim fallback notice:', err);
   }
 
-  results.sort((a, b) => a.distanceKm - b.distanceKm);
-  return results.slice(0, 6);
+  liveFacilities.sort((a, b) => a.distanceKm - b.distanceKm);
+  return liveFacilities.slice(0, 6);
 }

@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { verifyScanOnline, ScanApiResponse } from '../services/sensooApiService';
+import { getCurrentUserLocation } from '../services/clinicService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -121,7 +122,7 @@ export default function CheckingScreen() {
     // Coordinate minimum animation duration with real server response
     const minAnimPromise = new Promise((resolve) => setTimeout(resolve, 2900));
 
-    Promise.all([apiPromise, minAnimPromise]).then(([apiResult]) => {
+    Promise.all([apiPromise, minAnimPromise]).then(async ([apiResult]) => {
       if (!isMounted) return;
 
       const apiResponse = apiResult.ok && apiResult.data ? apiResult.data : null;
@@ -198,6 +199,8 @@ export default function CheckingScreen() {
         resolvedReason = apiResponse.reason || 'Barcode does not exist in authorized manufacturer whitelist database.';
       }
 
+      const userLoc = await getCurrentUserLocation();
+
       setVerdict({
         code: scannedCode,
         name: resolvedName,
@@ -206,8 +209,13 @@ export default function CheckingScreen() {
         status: verdictStatus,
         title: scenario === 'AUTHENTIC' ? '✓ Authentic Product Verified' : `🚨 ${scenario.replace('_', ' ')}`,
         description: resolvedReason,
-        region: 'Lagos, Nigeria',
-        telemetry: { lat: 6.5244, lng: 3.3792, velocity: '0 km/h (Live)', time: now },
+        region: userLoc.city || 'Current Location',
+        telemetry: {
+          lat: userLoc.lat || 0,
+          lng: userLoc.lng || 0,
+          velocity: '0 km/h (Live)',
+          time: now,
+        },
       });
 
       // Navigate smoothly with real server parameters
