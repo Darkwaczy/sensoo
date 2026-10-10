@@ -15,7 +15,7 @@ Built for the KodeHauz@10 Hackathon &middot; Decennium Sprint
 [![EMDEX API](https://img.shields.io/badge/Registry-EMDEX_Nigeria-107C41?style=flat-square)](https://sandbox.emdexapi.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Gemini](https://img.shields.io/badge/Gemini-3.1_Flash_Lite-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
+[![Gemini](https://img.shields.io/badge/Gemini-3.8_Flash-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
 [![N-ATLaS](https://img.shields.io/badge/NCAIR-N--ATLaS-006B3F?style=flat-square)](https://huggingface.co/NCAIR1/N-ATLaS)
 
 </div>

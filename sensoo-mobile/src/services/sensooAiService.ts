@@ -33,8 +33,8 @@ const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 const HF_NATLAS_MODEL = process.env.EXPO_PUBLIC_HF_NATLAS_MODEL || 'NCAIR1/N-ATLaS';
 const HF_API_TOKEN = process.env.EXPO_PUBLIC_HF_API_TOKEN || '';
 
-export const PRIMARY_MODEL = 'gemini-3.1-flash-lite-preview';
-export const FALLBACK_MODEL = 'gemini-2.5-flash-lite';
+export const PRIMARY_MODEL = 'gemini-3.8-flash';
+export const FALLBACK_MODEL = 'gemini-3.6-flash';
 export const SOVEREIGN_NATLAS_MODEL = 'NCAIR1/N-ATLaS';
 
 const SYSTEM_INSTRUCTION = `You are Sensoo Agentic AI, Nigeria's frontline consumer verification, clinical safety, and anti-counterfeit intelligence system.
@@ -99,7 +99,7 @@ export async function sendAgentMessage(
     ? `${SOVEREIGN_NATLAS_MODEL} + ${PRIMARY_MODEL}`
     : PRIMARY_MODEL;
 
-  // 1. Try Primary Model (gemini-3.1-flash-lite-preview)
+  // 1. Try Primary Model (gemini-3.8-flash)
   try {
     const res = await callGeminiModel(PRIMARY_MODEL, contents);
     return {
@@ -121,7 +121,7 @@ export async function sendAgentMessage(
       }
     } catch (_ignored) {}
 
-    // 2. Try Fallback Model (gemini-2.5-flash-lite)
+    // 2. Try Fallback Model (gemini-3.6-flash)
     try {
       const fallbackRes = await callGeminiModel(FALLBACK_MODEL, contents);
       return {
