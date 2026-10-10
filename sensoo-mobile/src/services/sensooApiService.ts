@@ -198,6 +198,18 @@ export async function lookupEmdexDrug(
   return null;
 }
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .trim();
+}
+
 /**
  * Direct client-side lookup via Universal Real-Time GTIN Web Search & GS1 verification.
  * Calls Sensoo Backend read-only /api/v1/lookup with Groq LLaMA 3.3 fallback.
@@ -212,47 +224,52 @@ export async function lookupLiveGtinWeb(
   // 1. Direct High-Speed Exact-Quoted Web Index Search (0.5s, unblocked, 100% exact)
   try {
     const searchCtrl = new AbortController();
-    const searchTimeout = setTimeout(() => searchCtrl.abort(), 4000);
-    const searchParams = new URLSearchParams();
-    searchParams.append('q', `"${digits}"`);
+    const searchTimeout = setTimeout(() => searchCtrl.abort(), 5000);
+    const searchQueries = [`"${digits}"`, `"${digits}" barcode`];
 
-    const searchRes = await fetch('https://lite.duckduckgo.com/lite/', {
-      method: 'POST',
-      body: searchParams.toString(),
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      signal: searchCtrl.signal,
-    });
-    clearTimeout(searchTimeout);
+    for (const q of searchQueries) {
+      const searchParams = new URLSearchParams();
+      searchParams.append('q', q);
 
-    if (searchRes.ok) {
-      const html = await searchRes.text();
-      const match = html.match(/class=['"]result-link['"][^>]*>(.*?)<\/a>/);
-      if (match && match[1]) {
-        let cleanTitle = match[1].replace(/<[^>]+>/g, '').trim();
-        cleanTitle = cleanTitle.replace(/\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga).*$/i, '').trim();
-        if (cleanTitle && !cleanTitle.toLowerCase().startsWith('barcode lookup')) {
-          let brand = 'Verified Brand';
-          if (cleanTitle.toLowerCase().includes('smart')) brand = 'Smart Collection';
-          else if (cleanTitle.toLowerCase().includes('dr.') || cleanTitle.toLowerCase().includes('rashel')) brand = 'Dr. Rashel';
-          else {
-            const firstWord = cleanTitle.split(' ')[0];
-            if (firstWord && firstWord.length > 2) brand = firstWord;
+      const searchRes = await fetch('https://lite.duckduckgo.com/lite/', {
+        method: 'POST',
+        body: searchParams.toString(),
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        signal: searchCtrl.signal,
+      });
+
+      if (searchRes.ok) {
+        const html = await searchRes.text();
+        const match = html.match(/class=['"]result-link['"][^>]*>(.*?)<\/a>/);
+        if (match && match[1]) {
+          let cleanTitle = decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '').trim());
+          cleanTitle = cleanTitle.replace(/\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga).*$/i, '').trim();
+          if (cleanTitle && !cleanTitle.toLowerCase().startsWith('barcode lookup')) {
+            let brand = 'Verified Brand';
+            if (cleanTitle.toLowerCase().includes('smart')) brand = 'Smart Collection';
+            else if (cleanTitle.toLowerCase().includes('dr.') || cleanTitle.toLowerCase().includes('rashel')) brand = 'Dr. Rashel';
+            else {
+              const firstWord = cleanTitle.split(' ')[0];
+              if (firstWord && firstWord.length > 2) brand = firstWord;
+            }
+
+            clearTimeout(searchTimeout);
+            return {
+              productName: cleanTitle,
+              brand: brand,
+              batch: `GTIN-${digits}`,
+              category: 'Consumer Goods',
+              status: 'AUTHENTIC',
+            };
           }
-
-          return {
-            productName: cleanTitle,
-            brand: brand,
-            batch: `GTIN-${digits}`,
-            category: 'Consumer Goods',
-            status: 'AUTHENTIC',
-          };
         }
       }
     }
+    clearTimeout(searchTimeout);
   } catch {
     // Continue to backend & Groq
   }

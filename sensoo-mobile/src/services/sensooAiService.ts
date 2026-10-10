@@ -133,13 +133,25 @@ export async function sendAgentMessage(
         languageUsed: targetLang,
       };
     } catch (fallbackErr: any) {
+      // 3. Try Groq LLaMA 3.3 Ultra-Low Latency Assistant
+      try {
+        const groqRes = await callGroqAssistant(userQuery, history, contextData);
+        if (groqRes) {
+          return groqRes;
+        }
+      } catch (_gErr) {}
+
       console.error(`[Sensoo AI] Cloud endpoints failed, using sovereign N-ATLaS fallback cache:`, fallbackErr?.message);
 
-      // 3. Graceful offline smart response localized to Nigerian language
+      // 4. Graceful offline smart response localized to Nigerian language
       return generateLocalizedSmartReply(userQuery, targetLang, contextData);
     }
   }
 }
+
+const LIVE_AI_BACKEND_URL = (
+  process.env.EXPO_PUBLIC_API_URL || 'https://sensoo-app-final-2.onrender.com/api/v1'
+).replace(/\/+$/, '');
 
 /**
  * Call MSFLib AI API Backend (/api/v1/ai/ask)
@@ -149,7 +161,7 @@ async function callMsfLibBackendAi(
   contextData?: { scannedCode?: string; productName?: string; scenario?: string }
 ): Promise<SensooAiResponse | null> {
   try {
-    const response = await fetch('http://localhost:8000/api/v1/ai/ask', {
+    const response = await fetch(`${LIVE_AI_BACKEND_URL}/ai/ask`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -173,6 +185,66 @@ async function callMsfLibBackendAi(
     }
   } catch (e) {
     // Backend offline, fallback seamlessly to client AI
+  }
+  return null;
+}
+
+/**
+ * Direct Ultra-Fast Groq AI Assistant Fallback
+ */
+async function callGroqAssistant(
+  userQuery: string,
+  history: AiChatMessage[] = [],
+  contextData?: { scannedCode?: string; productName?: string; scenario?: string }
+): Promise<SensooAiResponse | null> {
+  const groqKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
+  if (!groqKey) return null;
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const messages = [
+      {
+        role: 'system',
+        content: `${SYSTEM_INSTRUCTION}\nProduct Context: Name="${contextData?.productName || 'None'}", Code="${contextData?.scannedCode || 'None'}", Verdict="${contextData?.scenario || 'None'}".`,
+      },
+      ...history.slice(-4).map((m) => ({
+        role: m.role === 'model' ? 'assistant' : m.role,
+        content: m.content,
+      })),
+      { role: 'user', content: userQuery },
+    ];
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${groqKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages,
+        temperature: 0.3,
+        max_tokens: 350,
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+
+    if (res.ok) {
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content?.trim();
+      if (reply) {
+        return {
+          success: true,
+          reply,
+          modelUsed: 'Groq LLaMA-3.3-70B',
+          intent: 'MEDICAL_SAFETY',
+        };
+      }
+    }
+  } catch (e) {
+    // Continue
   }
   return null;
 }
