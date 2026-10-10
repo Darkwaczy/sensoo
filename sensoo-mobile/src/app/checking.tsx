@@ -230,7 +230,7 @@ export default function CheckingScreen() {
         location: userLoc.city || 'Current Location',
         manufacturer: resolvedBrand,
         batchId: resolvedBatch,
-        time: ''
+        time: now,
       }).catch(console.warn);
 
       // Navigate smoothly with real server parameters

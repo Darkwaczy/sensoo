@@ -202,6 +202,23 @@ export default function ResultScreen() {
     ? { uri: params.imageUrl }
     : (activeScenario === 'COUNTERFEIT' ? baseConfig.heroImage : baseConfig.productImage);
 
+  // Automatically persist every scanned item to local recent scans
+  useEffect(() => {
+    if (params.code) {
+      saveScanToLocalHistory({
+        name: resolvedProductName.replace('\n', ' '),
+        code: params.code,
+        status: activeScenario === 'AUTHENTIC' ? 'VERIFIED' : (activeScenario === 'WRONG_REGION' ? 'WRONG_REGION' : 'COUNTERFEIT'),
+        statusText: activeScenario === 'AUTHENTIC' ? 'Verified' : (activeScenario === 'WRONG_REGION' ? 'Wrong Region' : (activeScenario === 'ALREADY_PURCHASED' ? 'Already Purchased' : 'Counterfeit')),
+        scenario: activeScenario,
+        imageUrl: params.imageUrl,
+        manufacturer: params.manufacturer,
+        batchId: params.batchId,
+        time: nowTime,
+      }).catch((err) => console.warn('Auto-save scan error:', err));
+    }
+  }, [params.code, activeScenario, resolvedProductName]);
+
   const config = {
     ...baseConfig,
     subtitle: params.reason || baseConfig.subtitle,

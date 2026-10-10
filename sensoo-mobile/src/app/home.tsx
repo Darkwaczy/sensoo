@@ -36,6 +36,7 @@ import {
 } from '../services/voiceAssistantService';
 import {
   getStoredScans,
+  subscribeToStoredScans,
   getDeviceLinkInfo,
   DeviceLinkInfo,
 } from '../services/sensooStorageService';
@@ -183,6 +184,29 @@ export default function HomeScreen() {
     }, [])
   );
 
+  // Real-time reactive subscription ensuring local scans always show immediately
+  useEffect(() => {
+    const unsubscribe = subscribeToStoredScans((stored) => {
+      if (!stored || stored.length === 0) return;
+      const mapped: RecentScanItem[] = stored.map((s, idx) => ({
+        id: s.id || `stored-${idx}`,
+        name: s.name,
+        image: s.imageUrl ? { uri: s.imageUrl } : require('../../assets/barcode_icon.png'),
+        status: s.status,
+        statusText: s.statusText,
+        time: s.time,
+        dateGroup: 'Today',
+        scenario: s.scenario,
+        code: s.code,
+      }));
+      setRecentScans((prev) => {
+        const storedCodes = new Set(mapped.map((m) => m.code));
+        return [...mapped, ...prev.filter((p) => !storedCodes.has(p.code))];
+      });
+    });
+    return unsubscribe;
+  }, []);
+
   useEffect(() => {
     getCurrentUserLocation().then((loc) => {
       if (loc.city && loc.city !== 'Current Location') {
@@ -239,9 +263,7 @@ export default function HomeScreen() {
         );
 
         if (validFeed.length === 0) {
-          setRecentScans([]);
-          setVerifiedProducts([]);
-          setAlerts([]);
+          // Never wipe out user local scans!
           return;
         }
 
@@ -348,8 +370,9 @@ export default function HomeScreen() {
 
         if (liveRecent.length > 0) {
           setRecentScans((prev) => {
-            const existingCodes = new Set(liveRecent.map((l) => l.code));
-            return [...liveRecent, ...prev.filter((p) => !existingCodes.has(p.code))];
+            const prevCodes = new Set(prev.map((p) => p.code));
+            const feedUnique = liveRecent.filter((l) => !prevCodes.has(l.code));
+            return [...prev, ...feedUnique];
           });
         }
         if (liveVerified.length > 0) {

@@ -28,7 +28,7 @@ export interface SensooAiResponse {
   error?: string;
 }
 
-// Securely loaded from environment variables (Never hardcoded)
+// Strictly loaded from environment variables (Never hardcoded)
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 const HF_NATLAS_MODEL = process.env.EXPO_PUBLIC_HF_NATLAS_MODEL || 'NCAIR1/N-ATLaS';
 const HF_API_TOKEN = process.env.EXPO_PUBLIC_HF_API_TOKEN || '';

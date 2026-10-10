@@ -35,6 +35,29 @@ const DEVICE_FILE = `${FileSystem.documentDirectory || ''}sensoo_device_identity
 let cachedDeviceId: string | null = null;
 let cachedScans: StoredScanItem[] = [];
 
+type ScansListener = (scans: StoredScanItem[]) => void;
+const scansListeners: Set<ScansListener> = new Set();
+
+export function subscribeToStoredScans(listener: ScansListener): () => void {
+  scansListeners.add(listener);
+  if (cachedScans.length > 0) {
+    listener(cachedScans);
+  }
+  return () => {
+    scansListeners.delete(listener);
+  };
+}
+
+function notifyScansListeners(scans: StoredScanItem[]) {
+  scansListeners.forEach((fn) => {
+    try {
+      fn(scans);
+    } catch (e) {
+      console.warn('[Sensoo Storage] Listener notification error:', e);
+    }
+  });
+}
+
 /**
  * Generates or retrieves the permanent hardware-linked device ID for this phone.
  */
@@ -138,10 +161,12 @@ export async function saveScanToLocalHistory(item: Omit<StoredScanItem, 'id' | '
     const updated = [fullItem, ...filtered].slice(0, 100); // keep up to 100 items
 
     cachedScans = updated;
+    notifyScansListeners(updated);
     await FileSystem.writeAsStringAsync(SCANS_FILE, JSON.stringify(updated, null, 2));
   } catch (err) {
     console.warn('[Sensoo Storage] Error saving scan to local file:', err);
     cachedScans = [fullItem, ...cachedScans];
+    notifyScansListeners(cachedScans);
   }
 
   return fullItem;
@@ -175,7 +200,10 @@ export async function clearStoredScans(): Promise<void> {
   try {
     await FileSystem.deleteAsync(SCANS_FILE, { idempotent: true });
     cachedScans = [];
+    notifyScansListeners([]);
   } catch (err) {
     console.warn('[Sensoo Storage] Error clearing scans:', err);
+    cachedScans = [];
+    notifyScansListeners([]);
   }
 }
