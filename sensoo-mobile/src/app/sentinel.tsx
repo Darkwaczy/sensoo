@@ -155,7 +155,7 @@ export default function SentinelScreenComponent() {
             timeWindow: 'Live Active',
             cloneIdentities: new Set(suspiciousScans.map((s) => s.code)).size,
             locationsCount: 2,
-            productName: latest.code.includes('UNL-9X4') ? 'Dove Body Wash 250ml' : `Threat Code: ${latest.code}`,
+            productName: latest.product_name || `Threat Code: ${latest.code}`,
             coordinates: { x: 55, y: 70 },
           };
 

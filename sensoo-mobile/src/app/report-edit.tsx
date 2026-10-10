@@ -24,7 +24,7 @@ export default function ReportEditScreen() {
     status?: string;
   }>();
 
-  const productName = params.name || 'Dove Body Wash\nDeep Moisture 250ml';
+  const productName = params.name || 'Reported Product';
   const [selectedReason, setSelectedReason] = useState('Suspected counterfeit');
   const [description, setDescription] = useState(
     "Packaging looks different from the original and the barcode doesn't match."
@@ -69,7 +69,7 @@ export default function ReportEditScreen() {
           <View style={styles.productBannerCard}>
             <View style={styles.productThumbWrapper}>
               <Image
-                source={require('../../assets/dove_body_wash.png')}
+                source={require('../../assets/barcode_icon.png')}
                 style={styles.productThumb}
                 resizeMode="contain"
               />
@@ -80,7 +80,7 @@ export default function ReportEditScreen() {
                 <Text style={styles.statusPillText}>Under Review</Text>
               </View>
               <Text style={styles.reportedDateText}>
-                Reported on Aug 20, 2025, 10:42 AM
+                Reported recently
               </Text>
             </View>
           </View>
@@ -111,7 +111,7 @@ export default function ReportEditScreen() {
           <View style={styles.photosRow}>
             <View style={styles.photoThumbWrapper}>
               <Image
-                source={require('../../assets/dove_body_wash.png')}
+                source={require('../../assets/barcode_icon.png')}
                 style={styles.photoImg}
                 resizeMode="contain"
               />
@@ -125,7 +125,7 @@ export default function ReportEditScreen() {
             </View>
             <View style={styles.photoThumbWrapper}>
               <Image
-                source={require('../../assets/dove_body_wash.png')}
+                source={require('../../assets/barcode_icon.png')}
                 style={styles.photoImg}
                 resizeMode="contain"
               />

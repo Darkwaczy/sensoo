@@ -35,8 +35,8 @@ export default function ReportProductScreen() {
     image?: string;
   }>();
 
-  const productName = params.name || 'Dove Body Wash\nDeep Moisture 250ml';
-  const scannedCode = params.code || '8999990012345';
+  const productName = params.name || (params.code ? `Product (${params.code})` : 'Reported Product');
+  const scannedCode = params.code || 'UNLISTED';
 
   const [selectedReason, setSelectedReason] = useState<string>('Suspected counterfeit');
   const [showReasonDropdown, setShowReasonDropdown] = useState<boolean>(false);
@@ -91,7 +91,7 @@ export default function ReportProductScreen() {
                 source={
                   productName.includes('Panadol')
                     ? require('../../assets/panadol_extra.png')
-                    : require('../../assets/dove_body_wash.png')
+                    : require('../../assets/barcode_icon.png')
                 }
                 style={styles.productThumb}
                 resizeMode="contain"

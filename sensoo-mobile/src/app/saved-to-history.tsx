@@ -21,7 +21,7 @@ export default function SavedToHistoryScreen() {
     code?: string;
   }>();
 
-  const productName = params.name || 'Dove Body Wash\nDeep Moisture 250ml';
+  const productName = params.name || (params.code ? `Product (${params.code})` : 'Verified Product');
   const now = new Date();
   const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -60,7 +60,7 @@ export default function SavedToHistoryScreen() {
               source={
                 productName.includes('Panadol')
                   ? require('../../assets/panadol_extra.png')
-                  : require('../../assets/dove_body_wash.png')
+                  : require('../../assets/barcode_icon.png')
               }
               style={styles.productThumb}
               resizeMode="contain"

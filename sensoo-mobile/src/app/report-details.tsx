@@ -24,9 +24,9 @@ export default function ReportDetailsScreen() {
     date?: string;
   }>();
 
-  const productName = params.name || 'Dove Body Wash\nDeep Moisture 250ml';
+  const productName = params.name || 'Reported Product';
   const reportStatus = params.status || 'Under Review';
-  const reportedDate = params.date || 'Aug 20, 2025, 10:42 AM';
+  const reportedDate = params.date || 'Recent Report';
 
   const isUnderReview = reportStatus === 'Under Review';
   const isReviewed = reportStatus === 'Reviewed';
@@ -79,7 +79,7 @@ export default function ReportDetailsScreen() {
                   ? require('../../assets/panadol_extra.png')
                   : productName.includes('Dettol')
                   ? require('../../assets/dettol_antiseptic.png')
-                  : require('../../assets/dove_body_wash.png')
+                  : require('../../assets/barcode_icon.png')
               }
               style={styles.productThumb}
               resizeMode="contain"
@@ -152,7 +152,7 @@ export default function ReportDetailsScreen() {
               <View style={styles.photosThumbRow}>
                 <View style={styles.photoThumbWrapper}>
                   <Image
-                    source={require('../../assets/dove_body_wash.png')}
+                    source={require('../../assets/barcode_icon.png')}
                     style={styles.photoThumbImg}
                     resizeMode="contain"
                   />
@@ -166,7 +166,7 @@ export default function ReportDetailsScreen() {
                 </View>
                 <View style={styles.photoThumbWrapper}>
                   <Image
-                    source={require('../../assets/dove_body_wash.png')}
+                    source={require('../../assets/barcode_icon.png')}
                     style={styles.photoThumbImg}
                     resizeMode="contain"
                   />

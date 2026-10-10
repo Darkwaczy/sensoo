@@ -17,7 +17,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function ReportReviewCompleteScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ name?: string }>();
-  const productName = params.name || 'Dove Body Wash\nDeep Moisture 250ml';
+  const productName = params.name || 'Reviewed Product';
 
   return (
     <View style={styles.container}>
@@ -70,7 +70,7 @@ export default function ReportReviewCompleteScreen() {
         <View style={styles.productCard}>
           <View style={styles.productThumbBox}>
             <Image
-              source={require('../../assets/dove_body_wash.png')}
+              source={require('../../assets/barcode_icon.png')}
               style={styles.productThumb}
               resizeMode="contain"
             />

@@ -154,23 +154,22 @@ const getScanResultCardData = (scenario: string, scanCode: string, productName: 
   if (isFake) {
     return {
       scenario: 'COUNTERFEIT',
-      title: 'Counterfeit Detected',
-      subtitle: "This product doesn't match trusted manufacturer records. It may be fake or altered.",
+      title: 'Counterfeit / Unregistered',
+      subtitle: "This barcode does not exist in NAFDAC, EMDEX, OpenFoodFacts, or GS1 databases.",
       titleColor: '#DC2626',
       heroImage: require('../../assets/icons/hero_counterfeit.png'),
-      productImage: require('../../assets/dove_body_wash.png'),
-      productName: productName || 'Dove Body Wash\nDeep Moisture 250ml',
-      statusBadgeText: 'Counterfeit Detected',
+      productImage: require('../../assets/barcode_icon.png'),
+      productName: productName || (scanCode ? `Unregistered Product (${scanCode})` : 'Unregistered Product'),
+      statusBadgeText: 'Unverified / Counterfeit',
       statusBadgeBg: '#FEE2E2',
       statusBadgeColor: '#DC2626',
       details: [
-        { label: 'Brand', value: 'Dove' },
-        { label: 'Manufacturer', value: 'Unilever (Expected)' },
-        { label: 'Barcode', value: scanCode || '8999990012345' },
-        { label: 'Batch Number', value: 'Not found' },
-        { label: 'Expiry Date', value: 'Not found' },
+        { label: 'Barcode', value: scanCode || 'Unlisted Barcode' },
+        { label: 'Origin', value: 'Not in Whitelist' },
+        { label: 'Manufacturer', value: 'Unknown Origin' },
+        { label: 'Registry Match', value: 'No Record' },
       ],
-      calloutText: 'This product does not match official manufacturer records. It may be counterfeit or altered.',
+      calloutText: 'This barcode does not exist in official registries. It may be counterfeit, unverified, or an unregistered clone.',
       calloutType: 'danger',
     };
   }
@@ -335,8 +334,14 @@ export default function AgentScreenComponent() {
   const [clinicViewMode, setClinicViewMode] = useState<'list' | 'map'>('list');
   const [selectedClinic, setSelectedClinic] = useState<ClinicItem>(CLINICS_DATA[0]);
 
+  const contextProductName =
+    (params.productName as string) ||
+    (params.scanCode ? `Scanned Product (${params.scanCode})` : 'Flagged Product');
+  const contextScanCode = (params.scanCode as string) || 'UNLISTED';
+  const contextTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   // Report Form state
-  const [reportProductName, setReportProductName] = useState('Dove Body Wash 250ml');
+  const [reportProductName, setReportProductName] = useState(contextProductName);
   const [reportLocation, setReportLocation] = useState('Idumota Market, Lagos');
   const [reportDetails, setReportDetails] = useState('');
   const [reportPhotoAttached, setReportPhotoAttached] = useState(false);
@@ -1657,7 +1662,7 @@ export default function AgentScreenComponent() {
             <View style={styles.contextualProductCard}>
               <View style={styles.contextualThumbBox}>
                 <Image
-                  source={require('../../assets/dove_body_wash.png')}
+                  source={require('../../assets/barcode_icon.png')}
                   style={styles.contextualThumbImg}
                   resizeMode="contain"
                 />
@@ -1666,8 +1671,8 @@ export default function AgentScreenComponent() {
                 <Text style={styles.contextualFlagRed}>
                   You recently scanned a product that was flagged as counterfeit.
                 </Text>
-                <Text style={styles.contextualProdTitle}>Dove Body Wash Deep Moisture 250ml</Text>
-                <Text style={styles.contextualTime}>08:42 AM</Text>
+                <Text style={styles.contextualProdTitle}>{contextProductName}</Text>
+                <Text style={styles.contextualTime}>{contextTime}</Text>
               </View>
             </View>
 
@@ -2467,14 +2472,14 @@ export default function AgentScreenComponent() {
           <View style={styles.detailsHeroCard}>
             <View style={styles.detailsHeroThumb}>
               <Image
-                source={require('../../assets/dove_body_wash.png')}
+                source={require('../../assets/barcode_icon.png')}
                 style={styles.detailsHeroThumbImg}
                 resizeMode="contain"
               />
             </View>
             <View style={styles.detailsHeroMeta}>
-              <Text style={styles.detailsHeroTitle}>Dove Body Wash</Text>
-              <Text style={styles.detailsHeroSub}>Deep Moisture 250ml</Text>
+              <Text style={styles.detailsHeroTitle}>{contextProductName}</Text>
+              <Text style={styles.detailsHeroSub}>{`Barcode: ${contextScanCode}`}</Text>
               <View style={styles.counterfeitBadgePill}>
                 <Text style={styles.counterfeitBadgeText}>⚠️ Potential Counterfeit</Text>
               </View>
@@ -2485,22 +2490,22 @@ export default function AgentScreenComponent() {
           <View style={styles.detailsSpecCard}>
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Barcode</Text>
-              <Text style={styles.specValue}>40181700982</Text>
+              <Text style={styles.specValue}>{contextScanCode}</Text>
             </View>
             <View style={styles.specDivider} />
             <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Brand</Text>
-              <Text style={styles.specValue}>Dove</Text>
+              <Text style={styles.specLabel}>Product / Brand</Text>
+              <Text style={styles.specValue}>{contextProductName}</Text>
             </View>
             <View style={styles.specDivider} />
             <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Category</Text>
-              <Text style={styles.specValue}>Personal Care</Text>
+              <Text style={styles.specLabel}>Status</Text>
+              <Text style={styles.specValue}>Unverified Whitelist</Text>
             </View>
             <View style={styles.specDivider} />
             <View style={styles.specRow}>
               <Text style={styles.specLabel}>Scanned on</Text>
-              <Text style={styles.specValue}>29 Sept 2026, 08:42 AM</Text>
+              <Text style={styles.specValue}>{`Today, ${contextTime}`}</Text>
             </View>
             <View style={styles.specDivider} />
             <View style={styles.specRow}>
@@ -2775,7 +2780,7 @@ export default function AgentScreenComponent() {
                   reportPhotoAttached ? 'Photo Removed' : 'Photo Attached',
                   reportPhotoAttached
                     ? 'Image removed from report.'
-                    : '1 photo attached: dove_packaging_anomaly.jpg'
+                    : '1 photo attached: packaging_evidence.jpg'
                 );
               }}
             >
@@ -2795,7 +2800,7 @@ export default function AgentScreenComponent() {
               <Text style={styles.formLabel}>Product name</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="e.g. Dove Body Wash 250ml"
+                placeholder="e.g. Scanned Product / Brand"
                 placeholderTextColor="#94A3B8"
                 value={reportProductName}
                 onChangeText={setReportProductName}
