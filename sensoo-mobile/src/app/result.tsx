@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getCurrentUserLocation } from '../services/clinicService';
+import { saveScanToLocalHistory } from '../services/sensooStorageService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -245,6 +246,18 @@ export default function ResultScreen() {
         },
       });
     } else if (activeScenario === 'AUTHENTIC') {
+      saveScanToLocalHistory({
+        name: config.productName.replace('\n', ' '),
+        code: params.code || 'UNLISTED',
+        status: 'VERIFIED',
+        statusText: 'Verified',
+        scenario: 'AUTHENTIC',
+        imageUrl: params.imageUrl,
+        manufacturer: params.manufacturer,
+        batchId: params.batchId,
+        time: ''
+      }).catch((err) => console.warn('Failed to save to local history:', err));
+
       router.push({
         pathname: '/saved-to-history',
         params: {

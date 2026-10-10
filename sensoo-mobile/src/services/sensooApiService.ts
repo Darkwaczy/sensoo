@@ -39,16 +39,13 @@ export interface FeedItem {
   image_url?: string | null;
 }
 
-// Generate a persistent device ID for client identification
-const getDeviceId = (): string => {
-  try {
-    return 'DEV-' + Math.random().toString(36).substring(2, 9).toUpperCase();
-  } catch {
-    return 'DEV-SENSOO-CLIENT';
-  }
-};
+import { getPersistentDeviceId } from './sensooStorageService';
 
-const DEFAULT_DEVICE_ID = getDeviceId();
+// Fallback in-memory device ID
+let activeDeviceId = 'SNS-DEV-INIT';
+getPersistentDeviceId().then((id) => {
+  activeDeviceId = id;
+});
 
 /**
  * Direct client-side lookup against Open Food Facts & Open Beauty Facts
@@ -260,7 +257,7 @@ export async function lookupLiveGtinWeb(
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -334,7 +331,7 @@ export async function verifyScanOnline(
     lat,
     lng,
     timestamp: new Date().toISOString(),
-    device_id: DEFAULT_DEVICE_ID,
+    device_id: activeDeviceId,
   };
 
   // 1. Try Live Sensoo Backend

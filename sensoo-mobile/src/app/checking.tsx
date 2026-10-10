@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { verifyScanOnline, ScanApiResponse } from '../services/sensooApiService';
 import { getCurrentUserLocation } from '../services/clinicService';
+import { saveScanToLocalHistory } from '../services/sensooStorageService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -217,6 +218,20 @@ export default function CheckingScreen() {
           time: now,
         },
       });
+
+      // Persist to local recent scans immediately
+      saveScanToLocalHistory({
+        name: resolvedName,
+        code: scannedCode,
+        status: verdictStatus === 'GENUINE' ? 'VERIFIED' : (scenario === 'WRONG_REGION' ? 'WRONG_REGION' : 'COUNTERFEIT'),
+        statusText: verdictStatus === 'GENUINE' ? 'Verified' : (scenario === 'WRONG_REGION' ? 'Wrong Region' : (scenario === 'ALREADY_PURCHASED' ? 'Already Purchased' : 'Counterfeit')),
+        scenario,
+        imageUrl: apiResponse?.image_url || undefined,
+        location: userLoc.city || 'Current Location',
+        manufacturer: resolvedBrand,
+        batchId: resolvedBatch,
+        time: ''
+      }).catch(console.warn);
 
       // Navigate smoothly with real server parameters
       if (params.origin === 'chat') {

@@ -16,7 +16,7 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as Speech from 'expo-speech';
 import {
   useAudioRecorder,
@@ -34,6 +34,15 @@ import {
   VoiceAssistantSettings,
   transcribeAudioWithGroq,
 } from '../services/voiceAssistantService';
+import {
+  getStoredScans,
+  getDeviceLinkInfo,
+  DeviceLinkInfo,
+} from '../services/sensooStorageService';
+import {
+  queryNafdacGreenbook,
+  NafdacGreenbookProduct,
+} from '../services/nafdacGreenbookService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -136,6 +145,42 @@ export default function HomeScreen() {
   const [verifiedProducts, setVerifiedProducts] = useState<VerifiedProductItem[]>(VERIFIED_PRODUCTS_DATA);
   const [alerts, setAlerts] = useState<AlertItem[]>(ALERTS_DATA);
   const [userCity, setUserCity] = useState('Current Location');
+  const [greenbookStatusFilter, setGreenbookStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [selectedGreenbookProduct, setSelectedGreenbookProduct] = useState<NafdacGreenbookProduct | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<DeviceLinkInfo | null>(null);
+
+  // Synchronize local saved scans and linked device identity whenever user views Home
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+      getStoredScans().then((stored) => {
+        if (!isMounted || !stored || stored.length === 0) return;
+        const mapped: RecentScanItem[] = stored.map((s, idx) => ({
+          id: s.id || `stored-${idx}`,
+          name: s.name,
+          image: s.imageUrl ? { uri: s.imageUrl } : require('../../assets/barcode_icon.png'),
+          status: s.status,
+          statusText: s.statusText,
+          time: s.time,
+          dateGroup: 'Today',
+          scenario: s.scenario,
+          code: s.code,
+        }));
+        setRecentScans((prev) => {
+          const storedCodes = new Set(mapped.map((m) => m.code));
+          return [...mapped, ...prev.filter((p) => !storedCodes.has(p.code))];
+        });
+      });
+
+      getDeviceLinkInfo().then((info) => {
+        if (isMounted) setDeviceInfo(info);
+      });
+
+      return () => {
+        isMounted = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     getCurrentUserLocation().then((loc) => {
@@ -308,6 +353,7 @@ export default function HomeScreen() {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showAgentModal, setShowAgentModal] = useState(false);
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [agentInput, setAgentInput] = useState('');
 
   // Voice Assistant ("Hey Sensoo") State & Foreground Listener
@@ -575,6 +621,12 @@ export default function HomeScreen() {
     if (recentFilter === 'Alerts') return item.status !== 'VERIFIED';
     return true;
   });
+
+  const greenbookProducts = queryNafdacGreenbook(
+    verifiedSearch,
+    greenbookStatusFilter,
+    verifiedFilter === 'All' ? 'All' : verifiedFilter
+  );
 
   const filteredVerifiedProducts = verifiedProducts.filter((item) => {
     const matchesSearch =
@@ -923,7 +975,7 @@ export default function HomeScreen() {
       )}
 
       {/* ======================================================== */}
-      {/* 3. SCREEN 2: VERIFIED PRODUCTS */}
+      {/* 3. SCREEN 2: NAFDAC GREENBOOK REGISTERED PRODUCTS */}
       {/* ======================================================== */}
       {activeView === 'VerifiedProducts' && (
         <>
@@ -938,8 +990,22 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.subHeaderTitleBlock}>
-              <Text style={styles.subPageTitle}>Verified Products</Text>
-              <Text style={styles.subPageSubtitle}>Products that match official manufacturer records.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.subPageTitle}>NAFDAC Greenbook</Text>
+                <View
+                  style={{
+                    backgroundColor: '#DCFCE7',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#86EFAC',
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803D' }}>Official</Text>
+                </View>
+              </View>
+              <Text style={styles.subPageSubtitle}>Nigeria's Registered Product Database (greenbook.nafdac.gov.ng)</Text>
             </View>
 
             {/* Search Bar */}
@@ -947,20 +1013,64 @@ export default function HomeScreen() {
               <Text style={styles.searchIcon}>🔍</Text>
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search verified products..."
+                placeholder="Search Product Name, Ingredients, NRN (e.g. 03-6507)..."
                 placeholderTextColor="#94A3B8"
                 value={verifiedSearch}
                 onChangeText={setVerifiedSearch}
               />
             </View>
 
+            {/* Status Filter Tabs (Active | Inactive | All) */}
+            <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginTop: 8, gap: 8 }}>
+              {(['All', 'Active', 'Inactive'] as const).map((st) => {
+                const isActive = greenbookStatusFilter === st;
+                return (
+                  <TouchableOpacity
+                    key={st}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: isActive
+                        ? (st === 'Active' ? '#DCFCE7' : (st === 'Inactive' ? '#FEF3C7' : '#0F172A'))
+                        : '#F1F5F9',
+                      borderWidth: 1,
+                      borderColor: isActive
+                        ? (st === 'Active' ? '#86EFAC' : (st === 'Inactive' ? '#FCD34D' : '#0F172A'))
+                        : '#E2E8F0',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 4,
+                    }}
+                    onPress={() => setGreenbookStatusFilter(st)}
+                    activeOpacity={0.8}
+                  >
+                    {st === 'Active' && <Text style={{ fontSize: 10 }}>🟢</Text>}
+                    {st === 'Inactive' && <Text style={{ fontSize: 10 }}>🟡</Text>}
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: isActive
+                          ? (st === 'Active' ? '#15803D' : (st === 'Inactive' ? '#B45309' : '#FFFFFF'))
+                          : '#64748B',
+                      }}
+                    >
+                      {st}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             {/* Category Filter Pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
-              {(['All', 'Medicine', 'Skincare', 'Personal Care', 'Food'] as const).map((cat) => (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.filterPillsRow, { marginTop: 10 }]}>
+              {(['All', 'Medical devices', 'Medicine', 'Skincare', 'Personal Care', 'Food'] as const).map((cat) => (
                 <TouchableOpacity
                   key={cat}
                   style={[styles.filterChip, verifiedFilter === cat && styles.filterChipActive]}
-                  onPress={() => setVerifiedFilter(cat)}
+                  onPress={() => setVerifiedFilter(cat as any)}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.filterChipText, verifiedFilter === cat && styles.filterChipTextActive]}>
@@ -972,27 +1082,133 @@ export default function HomeScreen() {
           </SafeAreaView>
 
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.subScrollContent} showsVerticalScrollIndicator={false}>
-            {filteredVerifiedProducts.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.subListItemCard}
-                activeOpacity={0.85}
-                onPress={() => navigateToResult('AUTHENTIC', item.code)}
-              >
-                <View style={styles.subListThumbWrapper}>
-                  <Image source={item.image} style={styles.subListThumb} resizeMode="contain" />
-                </View>
-                <View style={styles.subListMeta}>
-                  <Text style={styles.subListTitle}>{item.name}</Text>
-                  <View style={[styles.subListStatusPillInline, styles.statusVerified]}>
-                    <Text style={styles.statusPillIcon}>✓</Text>
-                    <Text style={[styles.statusPillText, styles.textVerified]}>Verified</Text>
+            {greenbookProducts.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 }}>
+                <Text style={{ fontSize: 32, marginBottom: 12 }}>📋</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#1E293B', textAlign: 'center' }}>
+                  No Products Found in Greenbook
+                </Text>
+                <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginTop: 6, lineHeight: 18 }}>
+                  No registered items match "{verifiedSearch}". Try searching by NRN number (e.g. 03-6507) or ingredient.
+                </Text>
+              </View>
+            ) : (
+              greenbookProducts.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 16,
+                    padding: 14,
+                    marginBottom: 12,
+                    borderWidth: 1,
+                    borderColor: item.status === 'Inactive' ? '#FDE68A' : '#E2E8F0',
+                    shadowColor: '#000',
+                    shadowOpacity: 0.04,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 2 },
+                    elevation: 2,
+                  }}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedGreenbookProduct(item)}
+                >
+                  {/* Top Row: Name and Status Badge */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', lineHeight: 20 }}>
+                        {item.productName}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                        backgroundColor: item.status === 'Active' ? '#DCFCE7' : '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: item.status === 'Active' ? '#86EFAC' : '#FCD34D',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: item.status === 'Active' ? '#16A34A' : '#D97706',
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '700',
+                          color: item.status === 'Active' ? '#15803D' : '#B45309',
+                        }}
+                      >
+                        {item.status}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={styles.subListTimeUnder}>{item.time}</Text>
-                </View>
-                <Text style={styles.subListChevron}>›</Text>
-              </TouchableOpacity>
-            ))}
+
+                  {/* NRN and Category Row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                    <View
+                      style={{
+                        backgroundColor: '#F1F5F9',
+                        paddingHorizontal: 7,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
+                        NRN: {item.nrn}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>•</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                      {item.productCategory}
+                    </Text>
+                  </View>
+
+                  {/* Active Ingredients */}
+                  <Text style={{ fontSize: 12, color: '#334155', marginTop: 6 }}>
+                    <Text style={{ fontWeight: '600', color: '#64748B' }}>Active: </Text>
+                    {item.activeIngredients}
+                  </Text>
+
+                  {/* Applicant & Approval Date Row */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 11, color: '#64748B', flex: 1 }} numberOfLines={1}>
+                      {item.applicantName}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+                      {item.approvalDate}
+                    </Text>
+                  </View>
+
+                  {/* Inactive Alert Callout Banner */}
+                  {item.status === 'Inactive' && (
+                    <View
+                      style={{
+                        marginTop: 8,
+                        backgroundColor: '#FFFBEB',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        borderLeftWidth: 3,
+                        borderLeftColor: '#F59E0B',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: '#B45309', fontWeight: '600' }}>
+                        ⚠️ Notice: {item.statusReason || 'Pending registration renewal with NAFDAC.'}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
         </>
       )}
@@ -1197,6 +1413,40 @@ export default function HomeScreen() {
                 <View style={styles.profileMenuMeta}>
                   <Text style={styles.profileMenuTitle}>Privacy & Security</Text>
                   <Text style={styles.profileMenuSubtitle}>Data, security and permissions</Text>
+                </View>
+                <Text style={styles.profileMenuChevron}>›</Text>
+              </TouchableOpacity>
+
+              {/* Linked Device Identity Item */}
+              <TouchableOpacity
+                style={styles.profileMenuItemCard}
+                activeOpacity={0.75}
+                onPress={() => setShowDeviceModal(true)}
+              >
+                <View style={[styles.profileMenuIconBox, { backgroundColor: '#E0F2FE' }]}>
+                  <Text style={{ fontSize: 18 }}>📱</Text>
+                </View>
+                <View style={styles.profileMenuMeta}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.profileMenuTitle}>Linked Device</Text>
+                    <View
+                      style={{
+                        backgroundColor: '#DCFCE7',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: '#86EFAC',
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803D' }}>
+                        Linked 🟢
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.profileMenuSubtitle}>
+                    {deviceInfo?.deviceId || 'SNS-DEV-ACTIVE'} • {deviceInfo?.deviceModel || 'Phone'}
+                  </Text>
                 </View>
                 <Text style={styles.profileMenuChevron}>›</Text>
               </TouchableOpacity>
@@ -1504,6 +1754,260 @@ export default function HomeScreen() {
           </ScrollView>
         </>
       )}
+
+      {/* ======================================================== */}
+      {/* NAFDAC GREENBOOK PRODUCT DOSSIER MODAL */}
+      {/* ======================================================== */}
+      <Modal
+        visible={!!selectedGreenbookProduct}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedGreenbookProduct(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContentCard, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 18 }}>📋</Text>
+                <Text style={styles.modalTitle}>Greenbook Dossier</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedGreenbookProduct(null)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedGreenbookProduct && (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 8 }}>
+                {/* Header Title & Status */}
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', lineHeight: 24 }}>
+                  {selectedGreenbookProduct.productName}
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      backgroundColor:
+                        selectedGreenbookProduct.status === 'Active' ? '#DCFCE7' : '#FEF3C7',
+                      borderWidth: 1,
+                      borderColor:
+                        selectedGreenbookProduct.status === 'Active' ? '#86EFAC' : '#FCD34D',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color:
+                          selectedGreenbookProduct.status === 'Active' ? '#15803D' : '#B45309',
+                      }}
+                    >
+                      {selectedGreenbookProduct.status === 'Active' ? '● Active' : '● Inactive'}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      backgroundColor: '#F1F5F9',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                      NRN: {selectedGreenbookProduct.nrn}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Inactive Alert / Active Success Banner */}
+                {selectedGreenbookProduct.status === 'Inactive' ? (
+                  <View
+                    style={{
+                      marginTop: 12,
+                      backgroundColor: '#FEF2F2',
+                      borderColor: '#FECACA',
+                      borderWidth: 1,
+                      padding: 12,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#DC2626' }}>
+                      ⚠️ Regulatory Inactive Notice
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 4, lineHeight: 17 }}>
+                      {selectedGreenbookProduct.statusReason ||
+                        'This product is listed as Inactive on greenbook.nafdac.gov.ng. Registration has expired or is subject to regulatory recall.'}
+                    </Text>
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      marginTop: 12,
+                      backgroundColor: '#F0FDF4',
+                      borderColor: '#BBF7D0',
+                      borderWidth: 1,
+                      padding: 12,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#16A34A' }}>
+                      ✓ Official Registry Confirmation
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#166534', marginTop: 4, lineHeight: 17 }}>
+                      Product registration is currently valid and active on Nigeria's National Registered Product Database.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Details Breakdown */}
+                <View style={{ marginTop: 14, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, gap: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Active Ingredients</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700', flex: 1, textAlign: 'right' }}>
+                      {selectedGreenbookProduct.activeIngredients}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Product Category</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700' }}>
+                      {selectedGreenbookProduct.productCategory}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Applicant Name</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700', flex: 1, textAlign: 'right' }}>
+                      {selectedGreenbookProduct.applicantName}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Approval Date</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700' }}>
+                      {selectedGreenbookProduct.approvalDate}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Form & ROA</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700' }}>
+                      {selectedGreenbookProduct.form} / {selectedGreenbookProduct.roa}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Strengths</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700' }}>
+                      {selectedGreenbookProduct.strengths}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Actions */}
+                <TouchableOpacity
+                  style={{
+                    marginTop: 16,
+                    backgroundColor: '#0F172A',
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                    marginBottom: 8,
+                  }}
+                  activeOpacity={0.88}
+                  onPress={() => {
+                    setSelectedGreenbookProduct(null);
+                    router.push('/scanner');
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>
+                    Scan & Verify Physical Packaging
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* LINKED DEVICE & HARDWARE IDENTITY MODAL */}
+      {/* ======================================================== */}
+      <Modal
+        visible={showDeviceModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeviceModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 18 }}>📱</Text>
+                <Text style={styles.modalTitle}>Linked Device Identity</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowDeviceModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                <Text style={{ fontSize: 12, color: '#166534', fontWeight: '600', lineHeight: 17 }}>
+                  ✓ This device is cryptographically linked to your Sensoo identity and protected by NAFDAC anti-clone telemetry.
+                </Text>
+              </View>
+
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Device ID</Text>
+                <Text style={[styles.modalInfoValue, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '800' }]}>
+                  {deviceInfo?.deviceId || 'SNS-DEV-ACTIVE'}
+                </Text>
+              </View>
+
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Hardware Model</Text>
+                <Text style={styles.modalInfoValue}>
+                  {deviceInfo?.deviceModel || 'Mobile Device'}
+                </Text>
+              </View>
+
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Operating System</Text>
+                <Text style={styles.modalInfoValue}>
+                  {deviceInfo?.osName || 'Android'} {deviceInfo?.osVersion || ''}
+                </Text>
+              </View>
+
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Linked Account</Text>
+                <Text style={styles.modalInfoValue}>
+                  {deviceInfo?.linkedAccount || 'Ings (Primary Holder)'}
+                </Text>
+              </View>
+
+              <View style={styles.modalInfoRow}>
+                <Text style={styles.modalInfoLabel}>Anti-Clone Status</Text>
+                <Text style={[styles.modalInfoValue, { color: '#16A34A', fontWeight: '700' }]}>
+                  Protected & Active 🟢
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ======================================================== */}
       {/* MODALS: Personal Info, Privacy, About */}
