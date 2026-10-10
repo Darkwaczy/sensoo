@@ -1,8 +1,4 @@
-/**
- * NAFDAC Greenbook Service
- * Connects directly to Nigeria's Registered Product Database (greenbook.nafdac.gov.ng)
- * Provides official registered product listings, including Active and Inactive (expired/delisted) products.
- */
+import { SENSOO_API_BASE_URL } from './sensooApiService';
 
 export interface NafdacGreenbookProduct {
   id: string;
@@ -242,6 +238,40 @@ export async function fetchLiveNafdacGreenbook(
   categoryFilter = 'All',
   limit = 30
 ): Promise<{ products: NafdacGreenbookProduct[]; totalRecords: number }> {
+  // 1. Try Python FastAPI Backend Endpoint First
+  try {
+    const backendCtrl = new AbortController();
+    const bt = setTimeout(() => backendCtrl.abort(), 3500);
+    const backendUrl = `${SENSOO_API_BASE_URL}/greenbook/products?search=${encodeURIComponent(query)}&status=${statusFilter}&category=${encodeURIComponent(categoryFilter)}&length=${limit}`;
+    const bRes = await fetch(backendUrl, { signal: backendCtrl.signal });
+    clearTimeout(bt);
+
+    if (bRes.ok) {
+      const bData = await bRes.json();
+      if (bData && Array.isArray(bData.products) && bData.products.length > 0) {
+        const formatted: NafdacGreenbookProduct[] = bData.products.map((p: any, idx: number) => ({
+          id: `gb-api-${p.product_id || idx}-${idx}`,
+          productName: p.product_name,
+          activeIngredients: p.active_ingredients,
+          productCategory: p.category.toLowerCase().includes('device') ? 'Medical devices' : (p.category.toLowerCase().includes('food') ? 'Food' : (p.category.toLowerCase().includes('cosmetic') ? 'Skincare' : 'Medicine')),
+          nrn: p.nrn,
+          form: p.form || 'Standard',
+          roa: 'Oral / Standard',
+          strengths: 'Standard Strength',
+          applicantName: p.applicant_name,
+          approvalDate: p.approval_date,
+          status: p.status === 'Active' ? 'Active' : 'Inactive',
+          statusReason: p.status === 'Inactive' ? 'Notice: Registration inactive or expired on greenbook.nafdac.gov.ng' : undefined,
+          code: p.nrn?.replace(/[^a-zA-Z0-9]/g, ''),
+        }));
+        return { products: formatted, totalRecords: bData.total_records || 8943 };
+      }
+    }
+  } catch {
+    // Backend sleeping or network slow - proceed to direct NAFDAC portal
+  }
+
+  // 2. Direct Government Portal Fallback (greenbook.nafdac.gov.ng)
   try {
     const params = new URLSearchParams({
       draw: '1',
