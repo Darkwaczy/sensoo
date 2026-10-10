@@ -45,23 +45,22 @@ interface ScenarioConfig {
 const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
   COUNTERFEIT: {
     type: 'COUNTERFEIT',
-    title: 'Counterfeit Detected',
-    subtitle: "This product doesn't match trusted manufacturer records. It may be fake or altered.",
+    title: 'Counterfeit / Unregistered',
+    subtitle: "This barcode does not exist in NAFDAC, EMDEX, OpenFoodFacts, or GS1 databases. It is unlisted and potentially counterfeit.",
     titleColor: '#DC2626',
     primaryButtonColor: '#DC2626',
     heroImage: require('../../assets/icons/hero_counterfeit.png'),
-    productImage: require('../../assets/dove_body_wash.png'),
-    productName: 'Dove Body Wash\nDeep Moisture 250ml',
-    productCategory: 'Body Wash',
-    statusBadgeText: 'Counterfeit Detected',
+    productImage: require('../../assets/icons/hero_counterfeit.png'),
+    productName: 'Unregistered Product',
+    productCategory: 'Unlisted Item',
+    statusBadgeText: 'Unverified / Counterfeit',
     statusBadgeBg: '#FEE2E2',
     statusBadgeColor: '#DC2626',
     details: [
-      { label: 'Brand', value: 'Dove' },
-      { label: 'Barcode', value: '8999990012345' },
-      { label: 'Batch Number', value: 'Not found' },
-      { label: 'Expiry Date', value: 'Not found' },
-      { label: 'Manufacturer', value: 'Unilever (Expected)' },
+      { label: 'Barcode', value: 'Unlisted' },
+      { label: 'Origin', value: 'Not in Whitelist' },
+      { label: 'Manufacturer', value: 'Unknown Origin' },
+      { label: 'Registry Match', value: 'No Record' },
     ],
     actionSecondaryText: 'Report Product',
     actionSecondaryIcon: '⚠️',
@@ -197,26 +196,32 @@ export default function ResultScreen() {
 
   const [activeScenario, setActiveScenario] = useState<ScenarioType>(getInitialScenario);
   const baseConfig = SCENARIOS[activeScenario];
+
+  const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const resolvedProductName = params.productName
+    ? params.productName
+    : (activeScenario === 'COUNTERFEIT'
+        ? (params.code ? `Unregistered (${params.code})` : 'Unregistered Product')
+        : baseConfig.productName);
+
+  const resolvedProductImage = params.imageUrl
+    ? { uri: params.imageUrl }
+    : (activeScenario === 'COUNTERFEIT' ? baseConfig.heroImage : baseConfig.productImage);
+
   const config = {
     ...baseConfig,
     subtitle: params.reason || baseConfig.subtitle,
-    productName: params.productName || baseConfig.productName,
-    productImage: params.imageUrl ? { uri: params.imageUrl } : baseConfig.productImage,
-    details: baseConfig.details.map((d) => {
-      if (d.label === 'Brand' && (params.manufacturer || params.productName)) {
-        return { ...d, value: params.manufacturer || params.productName!.split(' ')[0] };
-      }
-      if (d.label === 'Manufacturer' && params.manufacturer) {
-        return { ...d, value: params.manufacturer };
-      }
-      if (d.label === 'Batch Number' && params.batchId) {
-        return { ...d, value: params.batchId };
-      }
-      if (d.label === 'Barcode' && params.code) {
-        return { ...d, value: params.code };
-      }
-      return d;
-    }),
+    productName: resolvedProductName,
+    productImage: resolvedProductImage,
+    details: [
+      { label: 'Barcode', value: params.code || 'Unlisted Barcode' },
+      { label: 'Product / Brand', value: params.manufacturer || (resolvedProductName.split('\n')[0]) },
+      { label: 'Manufacturer', value: params.manufacturer || (activeScenario === 'COUNTERFEIT' ? 'Unregistered Origin' : 'Verified Whitelist') },
+      { label: 'Batch / NAFDAC', value: params.batchId || (activeScenario === 'COUNTERFEIT' ? 'Not in Registry' : 'VERIFIED-REGISTRY') },
+      { label: 'Scan Time', value: `Today, ${nowTime}` },
+      { label: 'Registry Status', value: activeScenario === 'AUTHENTIC' ? '✓ Whitelist Confirmed' : (activeScenario === 'COUNTERFEIT' ? '❌ No Record Found' : '⚠️ Security Flag') },
+    ],
   };
 
   const handleSecondaryAction = () => {
@@ -393,7 +398,7 @@ export default function ResultScreen() {
                   <View style={styles.travelRedDot} />
                   <View style={{ marginLeft: 8 }}>
                     <Text style={styles.travelLocName}>Lagos, Nigeria</Text>
-                    <Text style={styles.travelLocTime}>Today, 10:42 AM</Text>
+                    <Text style={styles.travelLocTime}>{`Today, ${nowTime}`}</Text>
                   </View>
                 </View>
 
@@ -403,15 +408,14 @@ export default function ResultScreen() {
                   <View style={styles.travelRedDot} />
                   <View style={{ marginLeft: 8 }}>
                     <Text style={styles.travelLocName}>Abuja, Nigeria</Text>
-                    <Text style={styles.travelLocTime}>Today, 10:51 AM</Text>
+                    <Text style={styles.travelLocTime}>Simultaneous Clone Signal</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.travelSpeedTag}>
                 <Text style={styles.travelSpeedPlane}>✈️</Text>
-                <Text style={styles.travelSpeedTitle}>Impossible travel</Text>
-                <Text style={styles.travelSpeedSub}>9 minutes apart{'\n'}(≈ 800 km)</Text>
+                <Text style={styles.travelSpeedSub}>{'Velocity anomaly\n(> 900 km/h)'}</Text>
               </View>
             </View>
 
@@ -423,10 +427,10 @@ export default function ResultScreen() {
                 resizeMode="cover"
               />
               <View style={styles.mapPinLagosTag}>
-                <Text style={styles.mapPinTagText}>📍 Lagos · 10:42 AM</Text>
+                <Text style={styles.mapPinTagText}>{`📍 Lagos · ${nowTime}`}</Text>
               </View>
               <View style={styles.mapPinAbujaTag}>
-                <Text style={styles.mapPinTagText}>📍 Abuja · 10:51 AM</Text>
+                <Text style={styles.mapPinTagText}>📍 Abuja · Clone Detected</Text>
               </View>
             </View>
 

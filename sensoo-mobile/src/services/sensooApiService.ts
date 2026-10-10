@@ -96,6 +96,47 @@ export async function lookupOpenFoodFacts(
 }
 
 /**
+ * Direct client-side lookup against UPCitemdb Global Retail & FMCG Barcode Whitelist
+ */
+export async function lookupUpcItemDb(
+  barcode: string
+): Promise<{ productName: string; brand: string; batch: string; imageUrl?: string } | null> {
+  const digits = barcode.replace(/[^0-9]/g, '');
+  if (digits.length < 7) return null;
+
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${digits}`, {
+      headers: { 'User-Agent': 'SensooApp/1.0 (Hackathon Verification Engine)' },
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+
+    if (res.ok) {
+      const json = await res.json();
+      const items = json.items || [];
+      if (items.length > 0) {
+        const item = items[0];
+        const title = item.title || 'Commercial Retail Product';
+        const brand = item.brand || item.publisher || 'Commercial Manufacturer';
+        const images = item.images || [];
+        const img = images.length > 0 ? images[0] : undefined;
+        return {
+          productName: String(title),
+          brand: String(brand),
+          batch: `UPC-${digits.slice(-6)}`,
+          imageUrl: img,
+        };
+      }
+    }
+  } catch {
+    // Continue
+  }
+  return null;
+}
+
+/**
  * Direct client-side lookup against EMDEX Nigeria Drug Database
  */
 export async function lookupEmdexDrug(
@@ -162,7 +203,10 @@ export async function lookupEmdexDrug(
 
 /**
  * Sends a real-time scan verification request to the live Sensoo Backend,
- * backed by immediate real-time OpenFoodFacts and EMDEX live resolution.
+ * backed by immediate real-time 3-tier lookup:
+ * 1. Open Food Facts
+ * 2. UPCitemdb (commercial retail/FMCG)
+ * 3. EMDEX Nigeria (NAFDAC pharmaceuticals)
  */
 export async function verifyScanOnline(
   code: string,
@@ -218,11 +262,9 @@ export async function verifyScanOnline(
     }
   }
 
-  // 2. Dual-Layer Real-Time Verification: Check OpenFoodFacts & EMDEX live
+  // 2. Dual-Layer Real-Time Verification: Tier 1 - OpenFoodFacts
   const offHit = await lookupOpenFoodFacts(cleanCode);
   if (offHit) {
-    // Real product found in OpenFoodFacts!
-    // Silently notify backend in background to register telemetry
     fetch(`${SENSOO_API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -248,10 +290,37 @@ export async function verifyScanOnline(
     };
   }
 
-  // Check EMDEX Nigeria Drug Database
+  // Tier 2 - UPCitemdb Commercial Retail Database
+  const upcHit = await lookupUpcItemDb(cleanCode);
+  if (upcHit) {
+    fetch(`${SENSOO_API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        product_name: upcHit.productName,
+        manufacturer: upcHit.brand,
+        batch_id: upcHit.batch,
+        region: 'GLOBAL',
+        state: 'IN_STOCK',
+      }),
+    }).catch(() => {});
+
+    return {
+      status: 'AUTHENTIC',
+      reason: 'Verified in Global Commercial Retail Barcode Whitelist',
+      alarms: [],
+      new_state: 'PURCHASED_RETIRED',
+      product_name: upcHit.productName,
+      manufacturer: upcHit.brand,
+      batch_id: upcHit.batch,
+      image_url: upcHit.imageUrl,
+    };
+  }
+
+  // Tier 3 - EMDEX Nigeria Drug Database
   const emdexHit = await lookupEmdexDrug(cleanCode);
   if (emdexHit) {
-    // Real drug found in EMDEX!
     fetch(`${SENSOO_API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

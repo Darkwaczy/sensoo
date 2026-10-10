@@ -4,6 +4,7 @@ Connects real-time scan verification to:
 1. EMDEX Nigeria Drug Database API (https://sandbox.emdexapi.com)
 2. Open Food Facts & Consumer Barcode Whitelist (https://world.openfoodfacts.org)
 3. Open Beauty Facts Barcode Whitelist (https://world.openbeautyfacts.org)
+4. UPCitemdb Global Retail & FMCG Barcode Whitelist (https://api.upcitemdb.com)
 """
 
 import logging
@@ -120,7 +121,6 @@ async def lookup_online_barcode(code: str) -> Optional[Dict[str, Any]]:
     """
     Performs real-time online lookup across global and Nigerian barcode databases (Open Food Facts & Open Beauty Facts).
     """
-    # Extract contiguous digits for GTIN/UPC/EAN barcodes
     code_digits = re.sub(r"[^0-9]", "", code.strip())
     if len(code_digits) < 7:
         return None
@@ -171,22 +171,66 @@ async def lookup_online_barcode(code: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+async def lookup_upcitemdb(code: str) -> Optional[Dict[str, Any]]:
+    """
+    Queries UPCitemdb global retail registry for commercial FMCG and supermarket products.
+    """
+    code_digits = re.sub(r"[^0-9]", "", code.strip())
+    if len(code_digits) < 7:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            url = f"https://api.upcitemdb.com/prod/trial/lookup?upc={code_digits}"
+            resp = await client.get(url, headers={"User-Agent": "SensooApp/1.0 (Hackathon Verification Engine)"})
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("items", [])
+                if items and len(items) > 0:
+                    item = items[0]
+                    title = item.get("title") or "Commercial Retail Product"
+                    brand = item.get("brand") or item.get("publisher") or "Commercial Manufacturer"
+                    category = item.get("category") or "Retail FMCG"
+                    images = item.get("images", [])
+                    image_url = images[0] if (images and len(images) > 0) else None
+
+                    return {
+                        "product_name": title,
+                        "manufacturer": brand,
+                        "batch_id": f"UPC-{code_digits[-6:]}",
+                        "source": "UPCitemdb Global Commercial Retail Whitelist",
+                        "category": category,
+                        "image_url": image_url,
+                        "status": "AUTHENTIC",
+                    }
+    except Exception as e:
+        logger.warning(f"UPCitemdb lookup error for '{code_digits}': {e}")
+    return None
+
+
 async def fetch_online_product_data(code: str) -> Optional[Dict[str, Any]]:
     """
-    Unified online lookup runner:
-    1. Checks Open Food Facts / Open Beauty Facts for barcode GTINs.
-    2. Checks EMDEX Drug API for product titles, brand names, or medicine codes.
+    Unified 3-tier online lookup runner:
+    1. Checks Open Food Facts / Open Beauty Facts for food/cosmetics barcode GTINs.
+    2. Checks UPCitemdb for general retail and commercial supermarket barcodes.
+    3. Checks EMDEX Drug API for product titles, brand names, or medicine codes.
     """
     clean_code = code.strip()
 
-    # 1. Barcode GTIN lookup
+    # 1. Barcode lookups (OpenFoodFacts & UPCitemdb)
     digits_only = re.sub(r"[^0-9]", "", clean_code)
     if len(digits_only) >= 7:
-        barcode_hit = await lookup_online_barcode(clean_code)
-        if barcode_hit:
-            return barcode_hit
+        # Tier 1: OpenFoodFacts
+        off_hit = await lookup_online_barcode(clean_code)
+        if off_hit:
+            return off_hit
 
-    # 2. EMDEX Nigeria Drug Database lookup
+        # Tier 2: UPCitemdb Commercial Retail Database
+        upc_hit = await lookup_upcitemdb(clean_code)
+        if upc_hit:
+            return upc_hit
+
+    # Tier 3: EMDEX Nigeria Drug Database lookup
     emdex_hit = await search_emdex_drug(clean_code)
     if emdex_hit:
         return emdex_hit
