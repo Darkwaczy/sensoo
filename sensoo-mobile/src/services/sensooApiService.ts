@@ -253,6 +253,7 @@ export async function lookupLiveGtinWeb(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
           Authorization: `Bearer ${groqKey}`,
         },
         body: JSON.stringify({
