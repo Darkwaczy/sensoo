@@ -398,31 +398,6 @@ export function validateGs1Barcode(barcode: string): {
   return { isValid, country, prefix };
 }
 
-// Verified Retail & Cosmetic Products Whitelist
-const NIGERIAN_RETAIL_WHITELIST: Record<
-  string,
-  { productName: string; manufacturer: string; category: string; batch: string }
-> = {
-  '8904035427073': {
-    productName: 'Karis Naturals Lightening & Clarifying Body Lotion (400ml)',
-    manufacturer: 'Karis Naturals / Kunle Ara Pharmacy Distribution',
-    category: 'Skincare & Personal Care',
-    batch: 'KN-LOT400',
-  },
-  '6291236920208': {
-    productName: 'Smart Collections Berries Weekend 803 EDP (100ml)',
-    manufacturer: 'Smart Collection Perfumes UAE',
-    category: 'Fragrance & Beauty',
-    batch: 'SC-803',
-  },
-  '6971764150130': {
-    productName: 'Dr. Rashel Vitamin C Face Serum (50ml)',
-    manufacturer: 'Dr. Rashel Skincare',
-    category: 'Facial Skincare',
-    batch: 'DR-VC50',
-  },
-};
-
 /**
  * Sends a real-time scan verification request to the live Sensoo Backend,
  * backed by immediate real-time 3-tier lookup:
@@ -483,20 +458,6 @@ export async function verifyScanOnline(
     if (hasSecurityAlarm) {
       return backendData;
     }
-  }
-
-  // 2. Verified Retail Catalog Match
-  const localWhitelisted = NIGERIAN_RETAIL_WHITELIST[cleanCode] || NIGERIAN_RETAIL_WHITELIST[digitsOnly];
-  if (localWhitelisted) {
-    return {
-      status: 'AUTHENTIC',
-      reason: 'Verified in Authentic Nigerian & Global Retail Catalog',
-      alarms: [],
-      new_state: 'IN_STOCK',
-      product_name: localWhitelisted.productName,
-      manufacturer: localWhitelisted.manufacturer,
-      batch_id: localWhitelisted.batch,
-    };
   }
 
   // 3. Dual-Layer Real-Time Verification: Tier 1 - OpenFoodFacts
