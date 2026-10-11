@@ -48,3 +48,11 @@ expo-env.d.ts
 *.jks
 *.keystore
 
+# Internal Docs & Presentation Materials
+SENSOO_SLIDE_DECK.md
+PROJECT_MAP.md
+
+# Redundant Root Deployment Clutter (Managed inside sensoo-backend/)
+/render.yaml
+/requirements.txt
+/.python-version
