@@ -37,6 +37,20 @@ def register_product(
         select(ProductCode).where(ProductCode.code == product_in.code)
     ).first()
     if existing:
+        # If existing record has a placeholder name, upgrade it with the real specific name
+        if (
+            existing.product_name.startswith("Authentic GS1 Product")
+            or existing.product_name.startswith("Unregistered")
+            or existing.product_name.startswith("Item ")
+        ) and not product_in.product_name.startswith("Authentic GS1 Product"):
+            existing.product_name = product_in.product_name
+            existing.manufacturer = product_in.manufacturer
+            existing.batch_id = product_in.batch_id
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+            return existing
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Product code '{product_in.code}' already exists.",

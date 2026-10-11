@@ -221,14 +221,10 @@ async def lookup_live_web_gtin(code: str) -> Optional[Dict[str, Any]]:
     if len(clean_digits) < 7:
         return None
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("EXPO_PUBLIC_GEMINI_API_KEY")
-    if not api_key:
-        return None
-
     stripped_digits = clean_digits.lstrip("0") if clean_digits.startswith("0") else clean_digits
     search_term = f"{stripped_digits} or {clean_digits}" if stripped_digits != clean_digits else clean_digits
 
-    # 1. High-speed unmetered exact web search resolver (zero API quota dependency)
+    # 1. High-speed unmetered exact web search resolver (zero API key dependency, runs on Render)
     try:
         ddg_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -242,17 +238,40 @@ async def lookup_live_web_gtin(code: str) -> Optional[Dict[str, Any]]:
                     headers=ddg_headers,
                 )
                 if ddg_resp.status_code == 200:
-                    m_link = re.search(r'<a[^>]+class=[\'"]result-link[\'"][^>]*>(.*?)</a>', ddg_resp.text)
-                    if m_link:
-                        import html as pyhtml
+                    import html as pyhtml
+                    for m_link in re.finditer(r'<a[^>]+class=[\'"]result-link[\'"][^>]*>(.*?)</a>', ddg_resp.text, re.I):
                         clean_t = pyhtml.unescape(re.sub(r'<[^>]+>', '', m_link.group(1)).strip())
-                        clean_t = re.sub(r'\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga).*$', '', clean_t, flags=re.I).strip()
-                        if clean_t and not clean_t.lower().startswith('barcode lookup'):
+                        clean_t = re.sub(r'\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga|Walmart|Jomashop).*$', '', clean_t, flags=re.I).strip()
+                        lower_t = clean_t.lower()
+                        if (
+                            clean_t
+                            and len(clean_t) > 3
+                            and not lower_t.startswith('barcode lookup')
+                            and not lower_t.startswith('upc lookup')
+                            and not lower_t.startswith('ean search')
+                            and not lower_t.startswith('free barcode')
+                            and 'search upc' not in lower_t
+                            and 'look up any upc' not in lower_t
+                        ):
                             brand_w = "Verified Brand"
-                            if "smart" in clean_t.lower():
+                            if "smart" in lower_t:
                                 brand_w = "Smart Collection"
-                            elif "dr." in clean_t.lower() or "rashel" in clean_t.lower():
+                            elif "dr." in lower_t or "rashel" in lower_t:
                                 brand_w = "Dr. Rashel"
+                            elif "cadbury" in lower_t:
+                                brand_w = "Cadbury"
+                            elif "dangote" in lower_t:
+                                brand_w = "Dangote"
+                            elif "nivea" in lower_t:
+                                brand_w = "Nivea"
+                            elif "nestle" in lower_t:
+                                brand_w = "Nestle"
+                            elif "unilever" in lower_t:
+                                brand_w = "Unilever"
+                            elif "dettol" in lower_t:
+                                brand_w = "Reckitt"
+                            elif "panadol" in lower_t:
+                                brand_w = "GSK Consumer"
                             else:
                                 first_w = clean_t.split()[0] if clean_t.split() else ""
                                 if len(first_w) > 2:
@@ -267,6 +286,10 @@ async def lookup_live_web_gtin(code: str) -> Optional[Dict[str, Any]]:
                             }
     except Exception as e:
         logger.debug(f"Direct web search notice: {e}")
+
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("EXPO_PUBLIC_GEMINI_API_KEY")
+    if not api_key:
+        return None
 
     prompt = (
         f"Search Google for the exact number: {search_term}. "

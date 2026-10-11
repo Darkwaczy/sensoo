@@ -221,10 +221,10 @@ export async function lookupLiveGtinWeb(
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
-  // 1. Direct High-Speed Exact-Quoted Web Index Search (0.5s, unblocked, 100% exact)
+  // 1. Direct High-Speed Exact Web Search Resolver (Checks ALL result links)
   try {
     const searchCtrl = new AbortController();
-    const searchTimeout = setTimeout(() => searchCtrl.abort(), 5000);
+    const searchTimeout = setTimeout(() => searchCtrl.abort(), 4000);
     const searchQueries = [`"${digits}"`, `"${digits}" barcode`];
 
     for (const q of searchQueries) {
@@ -244,14 +244,35 @@ export async function lookupLiveGtinWeb(
 
       if (searchRes.ok) {
         const html = await searchRes.text();
-        const match = html.match(/class=['"]result-link['"][^>]*>(.*?)<\/a>/);
-        if (match && match[1]) {
+        const linkRegex = /class=['"]result-link['"][^>]*>(.*?)<\/a>/gi;
+        let match: RegExpExecArray | null;
+
+        while ((match = linkRegex.exec(html)) !== null) {
           let cleanTitle = decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '').trim());
-          cleanTitle = cleanTitle.replace(/\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga).*$/i, '').trim();
-          if (cleanTitle && !cleanTitle.toLowerCase().startsWith('barcode lookup')) {
+          cleanTitle = cleanTitle.replace(/\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga|Walmart|Jomashop).*$/i, '').trim();
+          const lower = cleanTitle.toLowerCase();
+
+          if (
+            cleanTitle &&
+            cleanTitle.length > 3 &&
+            !lower.startsWith('barcode lookup') &&
+            !lower.startsWith('upc lookup') &&
+            !lower.startsWith('ean search') &&
+            !lower.startsWith('free barcode') &&
+            !lower.includes('search upc') &&
+            !lower.includes('look up any upc') &&
+            !lower.includes('upcitemdb')
+          ) {
             let brand = 'Verified Brand';
-            if (cleanTitle.toLowerCase().includes('smart')) brand = 'Smart Collection';
-            else if (cleanTitle.toLowerCase().includes('dr.') || cleanTitle.toLowerCase().includes('rashel')) brand = 'Dr. Rashel';
+            if (lower.includes('smart')) brand = 'Smart Collection';
+            else if (lower.includes('dr.') || lower.includes('rashel')) brand = 'Dr. Rashel';
+            else if (lower.includes('cadbury')) brand = 'Cadbury';
+            else if (lower.includes('dangote')) brand = 'Dangote';
+            else if (lower.includes('nivea')) brand = 'Nivea';
+            else if (lower.includes('nestle')) brand = 'Nestle';
+            else if (lower.includes('unilever')) brand = 'Unilever';
+            else if (lower.includes('dettol')) brand = 'Reckitt';
+            else if (lower.includes('panadol')) brand = 'GSK Consumer';
             else {
               const firstWord = cleanTitle.split(' ')[0];
               if (firstWord && firstWord.length > 2) brand = firstWord;
@@ -271,59 +292,78 @@ export async function lookupLiveGtinWeb(
     }
     clearTimeout(searchTimeout);
   } catch {
-    // Continue to backend & Groq
+    // Continue to Gemini AI resolver
   }
 
-  // 2. Sensoo Backend Read-Only Resolver
-  try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 7000);
-    const res = await fetch(`${SENSOO_API_BASE_URL}/lookup?barcode=${digits}`, {
-      signal: ctrl.signal,
-    });
-    clearTimeout(timeout);
+  // 2. Direct Gemini AI Real-Time GTIN Identification (Super fast, covers Nigerian and Global products)
+  const geminiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+  if (geminiKey) {
+    try {
+      const geminiCtrl = new AbortController();
+      const geminiTimeout = setTimeout(() => geminiCtrl.abort(), 5000);
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `Identify the commercial product for barcode ${digits}. If recognized as a commercial retail product in Nigeria or globally, return strictly JSON: {"found": true, "product_name": "...", "brand": "...", "category": "..."}. If completely unknown, return {"found": false}.`,
+                  },
+                ],
+              },
+            ],
+          }),
+          signal: geminiCtrl.signal,
+        }
+      );
+      clearTimeout(geminiTimeout);
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data.found && data.product_name) {
-        return {
-          productName: data.product_name,
-          brand: data.brand || 'Verified Brand',
-          batch: `GTIN-${digits}`,
-          category: data.category || 'Consumer Retail Goods',
-          status: data.status || 'AUTHENTIC',
-          origin: data.origin_country,
-        };
-      } else if (data.is_valid_gs1) {
-        return {
-          productName: `Authentic GS1 Product (${data.origin_country || 'International'})`,
-          brand: data.origin_country || 'GS1 Member Brand',
-          batch: `GTIN-${digits}`,
-          category: 'Consumer Retail Goods',
-          status: 'AUTHENTIC',
-          origin: data.origin_country,
-        };
+      if (geminiRes.ok) {
+        const geminiData = await geminiRes.json();
+        const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        let cleanJson = rawText.trim();
+        if (cleanJson.includes('```json')) {
+          cleanJson = cleanJson.split('```json')[1].split('```')[0].trim();
+        } else if (cleanJson.includes('```')) {
+          cleanJson = cleanJson.split('```')[1].split('```')[0].trim();
+        }
+        try {
+          const parsed = JSON.parse(cleanJson);
+          if (parsed.found && parsed.product_name && !parsed.product_name.toLowerCase().includes('unknown')) {
+            return {
+              productName: parsed.product_name,
+              brand: parsed.brand || 'Verified Brand',
+              batch: `GTIN-${digits}`,
+              category: parsed.category || 'Consumer Retail Goods',
+              status: 'AUTHENTIC',
+            };
+          }
+        } catch {}
       }
+    } catch {
+      // Continue to Groq & backend fallback
     }
-  } catch (err) {
-    console.warn('Backend live lookup notice:', err);
   }
 
-  // 3. Backup fallback: Groq (openai/gpt-oss-120b)
+  // 3. Backup fallback: Groq Reasoning Resolver
   const groqKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
   if (groqKey) {
     try {
       const groqCtrl = new AbortController();
-      const groqTimeout = setTimeout(() => groqCtrl.abort(), 5000);
+      const groqTimeout = setTimeout(() => groqCtrl.abort(), 4000);
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
           Authorization: `Bearer ${groqKey}`,
         },
         body: JSON.stringify({
           model: 'openai/gpt-oss-120b',
+          response_format: { type: 'json_object' },
           messages: [
             {
               role: 'system',
@@ -332,11 +372,10 @@ export async function lookupLiveGtinWeb(
             },
             {
               role: 'user',
-              content: `Identify product for barcode: ${digits}`,
+              content: `Identify commercial product for barcode: ${digits}`,
             },
           ],
           temperature: 0.1,
-          response_format: { type: 'json_object' },
         }),
         signal: groqCtrl.signal,
       });
@@ -347,7 +386,7 @@ export async function lookupLiveGtinWeb(
         const content = groqData.choices?.[0]?.message?.content;
         if (content) {
           const parsed = JSON.parse(content);
-          if (parsed.found && parsed.product_name) {
+          if (parsed.found && parsed.product_name && !parsed.product_name.toLowerCase().includes('unknown')) {
             return {
               productName: parsed.product_name,
               brand: parsed.brand || 'Verified Brand',
@@ -359,6 +398,32 @@ export async function lookupLiveGtinWeb(
     } catch {
       // Continue quietly
     }
+  }
+
+  // 4. Sensoo Backend Read-Only Resolver
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(`${SENSOO_API_BASE_URL}/lookup?barcode=${digits}`, {
+      signal: ctrl.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.found && data.product_name && !data.product_name.startsWith('Authentic GS1 Product')) {
+        return {
+          productName: data.product_name,
+          brand: data.brand || 'Verified Brand',
+          batch: `GTIN-${digits}`,
+          category: data.category || 'Consumer Retail Goods',
+          status: data.status || 'AUTHENTIC',
+          origin: data.origin_country,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Backend live lookup notice:', err);
   }
 
   return null;
@@ -462,8 +527,16 @@ export async function verifyScanOnline(
     // Backend waking up or network slow - proceed to direct live lookup
   }
 
-  // If backend verified as AUTHENTIC, return immediately
-  if (backendData && backendData.status === 'AUTHENTIC') {
+  // If backend verified as AUTHENTIC with a specific real product name, return immediately.
+  // Never accept generic placeholders ("Authentic GS1 Product...", "Unregistered...") prematurely!
+  if (
+    backendData &&
+    backendData.status === 'AUTHENTIC' &&
+    backendData.product_name &&
+    !backendData.product_name.startsWith('Authentic GS1 Product') &&
+    !backendData.product_name.startsWith('Unregistered') &&
+    !backendData.product_name.startsWith('Item ')
+  ) {
     return backendData;
   }
 
@@ -480,6 +553,19 @@ export async function verifyScanOnline(
   // 3. Dual-Layer Real-Time Verification: Tier 1 - OpenFoodFacts
   const offHit = await lookupOpenFoodFacts(cleanCode);
   if (offHit) {
+    fetch(`${SENSOO_API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        product_name: offHit.productName,
+        manufacturer: offHit.brand,
+        batch_id: offHit.batch,
+        region: 'GLOBAL',
+        state: 'IN_STOCK',
+      }),
+    }).catch(() => {});
+
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in OpenFoodFacts Global Barcode Whitelist',
@@ -492,9 +578,22 @@ export async function verifyScanOnline(
     };
   }
 
-  // Tier 2 - Universal Real-Time Web & GS1 GTIN Search (Exact Match)
+  // Tier 2 - Universal Real-Time Web & GS1 GTIN Search (Exact Match via Gemini & Web)
   const webHit = await lookupLiveGtinWeb(cleanCode);
   if (webHit) {
+    fetch(`${SENSOO_API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        product_name: webHit.productName,
+        manufacturer: webHit.brand,
+        batch_id: webHit.batch,
+        region: 'GLOBAL',
+        state: 'IN_STOCK',
+      }),
+    }).catch(() => {});
+
     return {
       status: (webHit.status as any) || 'AUTHENTIC',
       reason: webHit.origin
@@ -511,6 +610,19 @@ export async function verifyScanOnline(
   // Tier 3 - UPCitemdb Commercial Retail Database
   const upcHit = await lookupUpcItemDb(cleanCode);
   if (upcHit) {
+    fetch(`${SENSOO_API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        product_name: upcHit.productName,
+        manufacturer: upcHit.brand,
+        batch_id: upcHit.batch,
+        region: 'GLOBAL',
+        state: 'IN_STOCK',
+      }),
+    }).catch(() => {});
+
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in Global Commercial Retail Barcode Whitelist',
@@ -526,6 +638,19 @@ export async function verifyScanOnline(
   // Tier 4 - EMDEX Nigeria Drug Database
   const emdexHit = await lookupEmdexDrug(cleanCode);
   if (emdexHit) {
+    fetch(`${SENSOO_API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        product_name: emdexHit.productName,
+        manufacturer: emdexHit.brand,
+        batch_id: emdexHit.batch,
+        region: 'GLOBAL',
+        state: 'IN_STOCK',
+      }),
+    }).catch(() => {});
+
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in EMDEX Nigeria National Drug Whitelist',
