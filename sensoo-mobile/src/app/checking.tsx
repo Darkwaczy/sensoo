@@ -163,19 +163,37 @@ export default function CheckingScreen() {
         reasonLower.includes('already purchased') ||
         reasonLower.includes('clone');
 
+      const isPrevGeneric =
+        !prevScan?.name ||
+        prevScan.name.startsWith('Authentic GS1 Product') ||
+        prevScan.name.startsWith('Unregistered');
+      const isApiReal =
+        apiResponse.product_name &&
+        !apiResponse.product_name.startsWith('Authentic GS1 Product') &&
+        !apiResponse.product_name.startsWith('Unregistered');
+
+      const preferredName = isApiReal
+        ? apiResponse.product_name!
+        : (!isPrevGeneric ? prevScan!.name : (apiResponse.product_name || `Product (${scannedCode})`));
+
+      const preferredBrand =
+        (apiResponse.manufacturer && !apiResponse.manufacturer.includes('GS1'))
+          ? apiResponse.manufacturer
+          : (prevScan?.manufacturer || apiResponse.manufacturer || 'Registered Brand');
+
       if (prevScan || isBackendClone) {
         scenario = 'ALREADY_PURCHASED';
         verdictStatus = 'ALREADY_PURCHASED';
         const scanCity = prevScan?.location || 'Eket';
         const scanTime = prevScan?.time || 'earlier today';
-        resolvedName = prevScan?.name || apiResponse.product_name || `FAB Biscuit (${scannedCode})`;
-        resolvedBrand = prevScan?.manufacturer || apiResponse.manufacturer || 'Registered Brand';
+        resolvedName = preferredName;
+        resolvedBrand = preferredBrand;
         resolvedReason = `🚨 CLONE DETECTED: This unique product was already purchased and scanned in ${scanCity} at ${scanTime}. High probability of cloned packaging or duplicate barcode reuse.`;
       } else if (apiResponse.status === 'AUTHENTIC') {
         scenario = 'AUTHENTIC';
         verdictStatus = 'GENUINE';
-        resolvedName = apiResponse.product_name || `Authentic Product (${scannedCode})`;
-        resolvedBrand = apiResponse.manufacturer || 'Registered Whitelist';
+        resolvedName = preferredName;
+        resolvedBrand = preferredBrand;
         resolvedBatch = apiResponse.batch_id || 'VERIFIED-BATCH';
         resolvedReason = apiResponse.reason || 'Verified by Manufacturer. Registered in national database.';
       } else {
