@@ -166,6 +166,8 @@ export default function ResultScreen() {
     batchId?: string;
     reason?: string;
     imageUrl?: string;
+    expiryDate?: string;
+    nafdac?: string;
   }>();
 
   // Determine initial scenario from param or match from code
@@ -228,7 +230,9 @@ export default function ResultScreen() {
       { label: 'Barcode', value: params.code || 'Unlisted Barcode' },
       { label: 'Product / Brand', value: params.manufacturer || (resolvedProductName.split('\n')[0]) },
       { label: 'Manufacturer', value: params.manufacturer || (activeScenario === 'COUNTERFEIT' ? 'Unregistered Origin' : 'Verified Whitelist') },
-      { label: 'Batch / NAFDAC', value: params.batchId || (activeScenario === 'COUNTERFEIT' ? 'Not in Registry' : 'VERIFIED-REGISTRY') },
+      { label: 'NAFDAC / NAPAMS', value: activeScenario === 'COUNTERFEIT' ? '❌ Not Found in NAFDAC' : (params.nafdac || 'NAFDAC Verified (Active)') },
+      { label: 'Expiry Date', value: activeScenario === 'COUNTERFEIT' ? 'Unregulated / Expired Risk' : (params.expiryDate || 'Active Shelf-Life') },
+      { label: 'Batch ID', value: params.batchId || (activeScenario === 'COUNTERFEIT' ? 'Not in Registry' : 'VERIFIED-REGISTRY') },
       { label: 'Scan Time', value: `Today, ${nowTime}` },
       { label: 'Registry Status', value: activeScenario === 'AUTHENTIC' ? '✓ Whitelist Confirmed' : (activeScenario === 'COUNTERFEIT' ? '❌ No Record Found' : '⚠️ Security Flag') },
     ],

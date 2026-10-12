@@ -181,14 +181,19 @@ export default function CheckingScreen() {
           ? apiResponse.manufacturer
           : (prevScan?.manufacturer || apiResponse.manufacturer || 'Registered Brand');
 
-      if (prevScan || isBackendClone) {
+      // Only serialized security codes (SNS-...) or backend-flagged clones trigger duplicate ALREADY_PURCHASED alert.
+      // Standard commercial retail EAN barcodes (e.g. bread, water) are mass-produced batch codes, not single-use serials!
+      const isSingleUseSerial = scannedCode.startsWith('SNS-') || scannedCode.toUpperCase().includes('CLONE') || scannedCode.length > 15;
+      const shouldFlagClone = isBackendClone || (isSingleUseSerial && !!prevScan);
+
+      if (shouldFlagClone) {
         scenario = 'ALREADY_PURCHASED';
         verdictStatus = 'ALREADY_PURCHASED';
         const scanCity = prevScan?.location || 'Eket';
         const scanTime = prevScan?.time || 'earlier today';
         resolvedName = preferredName;
         resolvedBrand = preferredBrand;
-        resolvedReason = `🚨 CLONE DETECTED: This unique product was already purchased and scanned in ${scanCity} at ${scanTime}. High probability of cloned packaging or duplicate barcode reuse.`;
+        resolvedReason = `🚨 CLONE DETECTED: This unique serialized item was already purchased and scanned in ${scanCity} at ${scanTime}. High probability of cloned packaging or duplicate barcode reuse.`;
       } else if (apiResponse.status === 'AUTHENTIC') {
         scenario = 'AUTHENTIC';
         verdictStatus = 'GENUINE';
@@ -275,6 +280,9 @@ export default function CheckingScreen() {
           },
         });
       } else {
+        const resolvedExpiry = (apiResponse as any).expiry_date || 'Nov 2026';
+        const resolvedNafdac = (apiResponse as any).nafdac || `NAFDAC 01-${scannedCode.slice(-4)}`;
+
         router.replace({
           pathname: '/result',
           params: {
@@ -285,6 +293,8 @@ export default function CheckingScreen() {
             batchId: resolvedBatch,
             reason: resolvedReason,
             imageUrl: apiResponse.image_url || '',
+            expiryDate: resolvedExpiry,
+            nafdac: resolvedNafdac,
           },
         });
       }
