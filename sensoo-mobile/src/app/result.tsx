@@ -87,7 +87,7 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
       { label: 'Registry Telemetry', value: 'Multiple Scans Recorded' },
     ],
     actionSecondaryText: 'View Scan History',
-    actionSecondaryIcon: '🔖',
+    actionSecondaryIcon: '',
     serialNumber: undefined,
   },
   IMPOSSIBLE_TRAVEL: {
@@ -130,7 +130,7 @@ const SCENARIOS: Record<ScenarioType, ScenarioConfig> = {
       { label: 'Integrity Check', value: 'Packaging & Signature Verified' },
     ],
     actionSecondaryText: 'Save to History',
-    actionSecondaryIcon: '🔖',
+    actionSecondaryIcon: '',
     serialNumber: undefined,
   },
   WRONG_REGION: {
