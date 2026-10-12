@@ -64,7 +64,7 @@ export default function OtpVerificationScreen() {
 
     setLoading(true);
     try {
-      const res = await verifyOtpCode(fullCode);
+      const res = await verifyOtpCode(fullCode, destination);
       setLoading(false);
 
       if (res.success) {
@@ -91,7 +91,7 @@ export default function OtpVerificationScreen() {
     if (countdown > 0) return;
     setResending(true);
     try {
-      const res = await resendOtpCode();
+      const res = await resendOtpCode(destination, params.name);
       setResending(false);
       setCountdown(45);
       Alert.alert('Code Resent', res.message);

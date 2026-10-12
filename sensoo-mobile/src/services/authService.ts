@@ -54,8 +54,11 @@ export async function initAuth(): Promise<AuthState> {
     if (info.exists) {
       const data = await FileSystem.readAsStringAsync(AUTH_FILE);
       const parsed = JSON.parse(data);
-      if (parsed && parsed.user) {
-        currentAuth = parsed;
+      if (parsed) {
+        currentAuth = {
+          ...currentAuth,
+          ...parsed,
+        };
         notifyListeners();
         return currentAuth;
       }
@@ -434,6 +437,7 @@ export async function registerUser(params: {
     role: 'consumer',
     createdAt: new Date().toISOString(),
   };
+  await persistAuth();
 
   return {
     success: true,
@@ -482,6 +486,7 @@ export async function loginUser(params: {
       phone: !id.includes('@') ? id : '',
       isVerified: false,
     };
+    await persistAuth();
 
     return {
       success: true,
@@ -589,10 +594,40 @@ export async function loginUser(params: {
  * Verify OTP entered by user
  */
 export async function verifyOtpCode(
-  enteredOtp: string
+  enteredOtp: string,
+  destinationOverride?: string
 ): Promise<{ success: boolean; message: string; user?: UserProfile }> {
-  const pUser = currentAuth.pendingUser || {};
-  const email = pUser.email || '';
+  let pUser = currentAuth.pendingUser || {};
+  let email = pUser.email?.trim().toLowerCase() || '';
+
+  if (!email && destinationOverride && destinationOverride.includes('@')) {
+    email = destinationOverride.trim().toLowerCase();
+  }
+  if (!email && currentAuth.pendingOtpDestination && currentAuth.pendingOtpDestination.includes('@')) {
+    email = currentAuth.pendingOtpDestination.trim().toLowerCase();
+  }
+
+  const localUsers = await loadLocalUsers();
+  if (!email && destinationOverride) {
+    const match = Object.values(localUsers).find(
+      (u: any) => u.phone === destinationOverride || u.email === destinationOverride
+    );
+    if (match?.email) {
+      email = match.email.toLowerCase();
+    }
+  }
+
+  if (!email) {
+    const userKeys = Object.keys(localUsers);
+    if (userKeys.length > 0) {
+      const sorted = userKeys.sort((a, b) => {
+        const timeA = new Date(localUsers[a].updatedAt || 0).getTime();
+        const timeB = new Date(localUsers[b].updatedAt || 0).getTime();
+        return timeB - timeA;
+      });
+      email = sorted[0];
+    }
+  }
 
   if (!email) {
     return {
@@ -600,6 +635,13 @@ export async function verifyOtpCode(
       message: 'No pending verification found. Please request a new code.',
     };
   }
+
+  const userObj = localUsers[email] || {};
+  pUser = {
+    ...userObj,
+    ...pUser,
+    email,
+  };
 
   let isVerified = false;
 
@@ -631,10 +673,10 @@ export async function verifyOtpCode(
   }
 
   const newUser: UserProfile = {
-    id: pUser.id || `USR-${Date.now().toString().slice(-6)}`,
-    fullName: pUser.fullName || 'Sensoo Member',
+    id: pUser.id || userObj.id || `USR-${Date.now().toString().slice(-6)}`,
+    fullName: pUser.fullName || userObj.fullName || 'Sensoo Member',
     email: email,
-    phone: pUser.phone || '',
+    phone: pUser.phone || userObj.phone || '',
     isVerified: true,
     token: pUser.token,
     role: (pUser.role as any) || 'consumer',
@@ -645,13 +687,14 @@ export async function verifyOtpCode(
   currentAuth.isAuthenticated = true;
   currentAuth.pendingOtpCode = undefined;
   currentAuth.pendingOtpDestination = undefined;
+  currentAuth.pendingUser = undefined;
 
   // Persist user account and active session
   await saveLocalUser({
     email,
     fullName: newUser.fullName,
     phone: newUser.phone,
-    password: pUser.password,
+    password: pUser.password || userObj.password,
   });
   await persistAuth();
 
@@ -665,15 +708,52 @@ export async function verifyOtpCode(
 /**
  * Resend OTP code
  */
-export async function resendOtpCode(): Promise<{ success: boolean; message: string }> {
-  const pUser = currentAuth.pendingUser || {};
-  const email = pUser.email || '';
-  const dest = currentAuth.pendingOtpDestination || email || 'your email';
+export async function resendOtpCode(
+  destinationOverride?: string,
+  nameOverride?: string
+): Promise<{ success: boolean; message: string }> {
+  let email = currentAuth.pendingUser?.email?.trim().toLowerCase() || '';
+  let fullName = currentAuth.pendingUser?.fullName || nameOverride || '';
+
+  if (!email && destinationOverride && destinationOverride.includes('@')) {
+    email = destinationOverride.trim().toLowerCase();
+  }
+  if (!email && currentAuth.pendingOtpDestination && currentAuth.pendingOtpDestination.includes('@')) {
+    email = currentAuth.pendingOtpDestination.trim().toLowerCase();
+  }
+
+  const localUsers = await loadLocalUsers();
+  if (!email && destinationOverride) {
+    const match = Object.values(localUsers).find(
+      (u: any) => u.phone === destinationOverride || u.email === destinationOverride
+    );
+    if (match?.email) {
+      email = match.email.toLowerCase();
+    }
+  }
+
+  if (!email) {
+    const userKeys = Object.keys(localUsers);
+    if (userKeys.length > 0) {
+      const sorted = userKeys.sort((a, b) => {
+        const timeA = new Date(localUsers[a].updatedAt || 0).getTime();
+        const timeB = new Date(localUsers[b].updatedAt || 0).getTime();
+        return timeB - timeA;
+      });
+      email = sorted[0];
+    }
+  }
 
   if (!email) {
     return { success: false, message: 'No registered email found to resend code.' };
   }
 
+  const userObj = localUsers[email] || {};
+  if (!fullName) {
+    fullName = userObj.fullName || nameOverride || email.split('@')[0];
+  }
+
+  const dest = email;
   const localOtp = `${Math.floor(100000 + Math.random() * 900000)}`;
   let backendSent = false;
 
@@ -687,11 +767,18 @@ export async function resendOtpCode(): Promise<{ success: boolean; message: stri
   } catch {}
 
   if (!backendSent) {
-    const localUsers = await loadLocalUsers();
-    const userObj = localUsers[email] || {};
-    await sendResendEmailDirect(email, localOtp, userObj.fullName || pUser.fullName);
+    await sendResendEmailDirect(email, localOtp, fullName);
     currentAuth.pendingOtpCode = localOtp;
   }
+
+  currentAuth.pendingOtpDestination = dest;
+  currentAuth.pendingUser = {
+    ...userObj,
+    ...(currentAuth.pendingUser || {}),
+    email,
+    fullName,
+  };
+  await persistAuth();
 
   return {
     success: true,
