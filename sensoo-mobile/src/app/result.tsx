@@ -168,6 +168,8 @@ export default function ResultScreen() {
     imageUrl?: string;
     expiryDate?: string;
     nafdac?: string;
+    conflictCity?: string;
+    conflictTime?: string;
   }>();
 
   // Determine initial scenario from param or match from code
@@ -193,6 +195,10 @@ export default function ResultScreen() {
   }, []);
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const conflictCity = params.conflictCity
+    ? params.conflictCity
+    : (userCity.toLowerCase().includes('abuja') ? 'Lagos, Nigeria' : 'Abuja, Nigeria');
+  const conflictTime = params.conflictTime || 'Simultaneous Clone Signal';
 
   const resolvedProductName = params.productName
     ? params.productName
@@ -230,8 +236,8 @@ export default function ResultScreen() {
       { label: 'Barcode', value: params.code || 'Unlisted Barcode' },
       { label: 'Product / Brand', value: params.manufacturer || (resolvedProductName.split('\n')[0]) },
       { label: 'Manufacturer', value: params.manufacturer || (activeScenario === 'COUNTERFEIT' ? 'Unregistered Origin' : 'Verified Whitelist') },
-      { label: 'NAFDAC / NAPAMS', value: activeScenario === 'COUNTERFEIT' ? '❌ Not Found in NAFDAC' : (params.nafdac || 'NAFDAC Verified (Active)') },
-      { label: 'Expiry Date', value: activeScenario === 'COUNTERFEIT' ? 'Unregulated / Expired Risk' : (params.expiryDate || 'Active Shelf-Life') },
+      { label: 'NAFDAC / NAPAMS', value: activeScenario === 'COUNTERFEIT' ? '❌ Not Found in NAFDAC' : (params.nafdac || 'Refer to packaging') },
+      { label: 'Expiry Date', value: activeScenario === 'COUNTERFEIT' ? 'Unregulated / Expired Risk' : (params.expiryDate || 'Printed on pack (1D barcode)') },
       { label: 'Batch ID', value: params.batchId || (activeScenario === 'COUNTERFEIT' ? 'Not in Registry' : 'VERIFIED-REGISTRY') },
       { label: 'Scan Time', value: `Today, ${nowTime}` },
       { label: 'Registry Status', value: activeScenario === 'AUTHENTIC' ? '✓ Whitelist Confirmed' : (activeScenario === 'COUNTERFEIT' ? '❌ No Record Found' : '⚠️ Security Flag') },
@@ -390,8 +396,8 @@ export default function ResultScreen() {
                 <View style={styles.travelPointRow}>
                   <View style={styles.travelRedDot} />
                   <View style={{ marginLeft: 8 }}>
-                    <Text style={styles.travelLocName}>Abuja, Nigeria</Text>
-                    <Text style={styles.travelLocTime}>Simultaneous Clone Signal</Text>
+                    <Text style={styles.travelLocName}>{conflictCity}</Text>
+                    <Text style={styles.travelLocTime}>{conflictTime}</Text>
                   </View>
                 </View>
               </View>
@@ -413,7 +419,7 @@ export default function ResultScreen() {
                 <Text style={styles.mapPinTagText}>{`📍 ${userCity.split(',')[0]} · ${nowTime}`}</Text>
               </View>
               <View style={styles.mapPinAbujaTag}>
-                <Text style={styles.mapPinTagText}>📍 Abuja · Clone Detected</Text>
+                <Text style={styles.mapPinTagText}>{`📍 ${conflictCity.split(',')[0]} · Clone Signal`}</Text>
               </View>
             </View>
 
@@ -499,8 +505,8 @@ export default function ResultScreen() {
               <View style={styles.timelineRow}>
                 <View style={styles.timelineOrangeDot} />
                 <View style={{ marginLeft: 10 }}>
-                  <Text style={styles.timelineLoc}>Prior Authorized Scan Point</Text>
-                  <Text style={styles.timelineTime}>Earlier Telemetry Record · Already Redeemed</Text>
+                  <Text style={styles.timelineLoc}>{conflictCity || 'Prior Authorized Scan Point'}</Text>
+                  <Text style={styles.timelineTime}>{conflictTime.includes('Prior') ? conflictTime : `Prior Scan · ${conflictTime}`}</Text>
                 </View>
               </View>
             </View>

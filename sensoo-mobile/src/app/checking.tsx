@@ -280,8 +280,10 @@ export default function CheckingScreen() {
           },
         });
       } else {
-        const resolvedExpiry = (apiResponse as any).expiry_date || 'Nov 2026';
-        const resolvedNafdac = (apiResponse as any).nafdac || `NAFDAC 01-${scannedCode.slice(-4)}`;
+        const resolvedExpiry = (apiResponse as any).expiry_date || '';
+        const resolvedNafdac = (apiResponse as any).nafdac || '';
+        const conflictCity = prevScan?.location || (scenario === 'IMPOSSIBLE_TRAVEL' ? (detectedCity.toLowerCase().includes('abuja') ? 'Lagos, Nigeria' : 'Abuja, Nigeria') : '');
+        const conflictTime = prevScan?.time || (scenario === 'IMPOSSIBLE_TRAVEL' ? 'Simultaneous telemetry' : '');
 
         router.replace({
           pathname: '/result',
@@ -295,6 +297,8 @@ export default function CheckingScreen() {
             imageUrl: apiResponse.image_url || '',
             expiryDate: resolvedExpiry,
             nafdac: resolvedNafdac,
+            conflictCity,
+            conflictTime,
           },
         });
       }

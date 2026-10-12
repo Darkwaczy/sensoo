@@ -94,8 +94,8 @@ export async function lookupGs1Nigeria(
           productName: name || `${brand} Packaged Product`,
           brand: company || brand || 'GS1 Nigeria Member',
           batch: `GS1NG-${digits.slice(-6)}`,
-          expiryDate: 'Dec 2026',
-          nafdac: `NAFDAC-${digits.slice(-5)}`,
+          expiryDate: '',
+          nafdac: '',
           category: 'Packaged FMCG Goods',
         };
       }
