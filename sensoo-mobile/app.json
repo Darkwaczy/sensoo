@@ -2,7 +2,7 @@
   "expo": {
     "name": "sensoo-mobile",
     "slug": "sensoo-mobile",
-    "owner": "ingsetch",
+    "owner": "ingstech",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,7 +19,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.sensoomobile"
+      "package": "com.anonymous.sensoomobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -38,8 +44,9 @@
       "reactCompiler": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "457e743f-898a-4d0c-b967-68c59da5a838"
+        "projectId": "701b0ba4-4c3a-4ac5-be62-07864b2d3881"
       }
     }
   }
