@@ -32,15 +32,6 @@ export default function SignUpScreen() {
   const [agreeTerms, setAgreeTerms] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  const handleDemoFill = () => {
-    setFullName('Ings Abubakar');
-    setEmail('ings@sensoo.app');
-    setPhone('+234 801 234 5678');
-    setPassword('Sensoo2026!');
-    setConfirmPassword('Sensoo2026!');
-    setAgreeTerms(true);
-  };
-
   const handleSignUp = async () => {
     if (!fullName.trim()) {
       Alert.alert('Required Field', 'Please enter your full name.');
@@ -74,10 +65,10 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       const res = await registerUser({
-        fullName,
-        email,
-        phone,
-        password,
+        fullName: fullName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        password: password,
       });
 
       setLoading(false);
@@ -86,7 +77,7 @@ export default function SignUpScreen() {
           pathname: '/otp',
           params: {
             destination: res.destination,
-            name: fullName,
+            name: fullName.trim(),
             mode: 'signup',
           },
         });
@@ -107,7 +98,7 @@ export default function SignUpScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent />
 
       <SafeAreaView style={styles.topSafeArea} edges={['top']}>
-        {/* Navigation & Logo Header */}
+        {/* Navigation & Header */}
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
@@ -124,13 +115,7 @@ export default function SignUpScreen() {
             resizeMode="contain"
           />
 
-          <TouchableOpacity
-            style={styles.demoFillBtn}
-            activeOpacity={0.8}
-            onPress={handleDemoFill}
-          >
-            <Text style={styles.demoFillText}>Fill Demo</Text>
-          </TouchableOpacity>
+          <View style={styles.headerPlaceholder} />
         </View>
       </SafeAreaView>
 
@@ -154,10 +139,9 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Full Name</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="e.g. Ings Abubakar"
+                placeholder="Enter your full name"
                 placeholderTextColor="#94A3B8"
                 value={fullName}
                 onChangeText={setFullName}
@@ -170,10 +154,9 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email Address</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>✉️</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="e.g. ings@example.com"
+                placeholder="name@example.com"
                 placeholderTextColor="#94A3B8"
                 value={email}
                 onChangeText={setEmail}
@@ -183,12 +166,11 @@ export default function SignUpScreen() {
             </View>
           </View>
 
-          {/* Phone Number with Nigerian country flag */}
+          {/* Phone Number */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Phone Number</Text>
             <View style={styles.inputWrapper}>
               <View style={styles.countryCodeBadge}>
-                <Text style={styles.countryFlag}>🇳🇬</Text>
                 <Text style={styles.countryCodeText}>+234</Text>
               </View>
               <TextInput
@@ -206,7 +188,6 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="Minimum 6 characters"
@@ -220,7 +201,7 @@ export default function SignUpScreen() {
                 onPress={() => setShowPassword(!showPassword)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
+                <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -229,7 +210,6 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Confirm Password</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔐</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="Re-type your password"
@@ -238,9 +218,6 @@ export default function SignUpScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry={!showPassword}
               />
-              {confirmPassword.length > 0 && password === confirmPassword && (
-                <Text style={styles.matchCheck}>✓</Text>
-              )}
             </View>
           </View>
 
@@ -250,16 +227,17 @@ export default function SignUpScreen() {
             activeOpacity={0.8}
             onPress={() => setAgreeTerms(!agreeTerms)}
           >
-            <View style={[styles.checkbox, agreeTerms && styles.checkboxActive]}>
-              {agreeTerms && <Text style={styles.checkmark}>✓</Text>}
+            <View style={[styles.checkbox, agreeTerms && styles.checkboxChecked]}>
+              {agreeTerms && <View style={styles.checkboxInner} />}
             </View>
             <Text style={styles.termsText}>
-              I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>.
+              I agree to Sensoo’s{' '}
+              <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+              <Text style={styles.termsLink}>Privacy Policy</Text>
             </Text>
           </TouchableOpacity>
 
-          {/* Submit Button */}
+          {/* Submit Sign Up Button */}
           <TouchableOpacity
             style={[styles.primaryButton, loading && { opacity: 0.8 }]}
             activeOpacity={0.85}
@@ -269,15 +247,12 @@ export default function SignUpScreen() {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>Create Account</Text>
-                <Text style={styles.primaryButtonArrow}>→</Text>
-              </View>
+              <Text style={styles.primaryButtonText}>Create Account</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Bottom Switch to Sign In */}
+        {/* Switch to Sign In */}
         <View style={styles.bottomSwitchRow}>
           <Text style={styles.bottomSwitchText}>Already have an account? </Text>
           <TouchableOpacity
@@ -288,11 +263,10 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Security Trust Badge */}
+        {/* Security Note */}
         <View style={styles.securityBadgeRow}>
-          <Text style={styles.securityShield}>🛡️</Text>
           <Text style={styles.securityBadgeText}>
-            Secured by NAFDAC Sentinel Network & GS1 Standards
+            Protected by Sensoo Product Verification
           </Text>
         </View>
       </ScrollView>
@@ -334,18 +308,9 @@ const styles = StyleSheet.create({
     width: 110,
     height: 36,
   },
-  demoFillBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#DCFCE7',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-  },
-  demoFillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803D',
+  headerPlaceholder: {
+    width: 36,
+    height: 36,
   },
 
   scrollView: {
@@ -353,7 +318,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 16,
     paddingBottom: 40,
   },
 
@@ -377,138 +342,116 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: '#F1F5F9',
+    padding: 20,
+    shadowColor: '#0B2215',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.04,
-    shadowRadius: 12,
+    shadowRadius: 16,
     elevation: 2,
-    marginBottom: 20,
+    marginBottom: 24,
   },
+
   inputGroup: {
     marginBottom: 16,
   },
   inputLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#334155',
     marginBottom: 6,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
     backgroundColor: '#F8FAFC',
-  },
-  inputIcon: {
-    fontSize: 16,
-    marginRight: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    height: 52,
   },
   countryCodeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-    paddingRight: 8,
+    marginRight: 10,
+    paddingRight: 10,
     borderRightWidth: 1,
     borderRightColor: '#CBD5E1',
   },
-  countryFlag: {
-    fontSize: 14,
-    marginRight: 4,
-  },
   countryCodeText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#334155',
   },
   textInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: '#0F172A',
-    fontWeight: '500',
+    paddingVertical: 0,
   },
   eyeBtn: {
-    padding: 6,
+    paddingLeft: 12,
+    paddingVertical: 4,
   },
-  eyeIcon: {
-    fontSize: 15,
-  },
-  matchCheck: {
-    fontSize: 16,
-    color: '#059669',
-    fontWeight: '800',
+  eyeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#00875A',
   },
 
   termsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 4,
-    marginBottom: 20,
+    alignItems: 'center',
+    marginVertical: 12,
   },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#94A3B8',
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-    marginTop: 2,
   },
-  checkboxActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+  checkboxChecked: {
+    borderColor: '#00875A',
+    backgroundColor: '#00875A',
   },
-  checkmark: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
+  checkboxInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
   },
   termsText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     color: '#64748B',
     lineHeight: 18,
   },
   termsLink: {
-    color: '#059669',
-    fontWeight: '700',
+    color: '#00875A',
+    fontWeight: '600',
   },
 
   primaryButton: {
-    backgroundColor: '#059669',
-    borderRadius: 14,
     height: 52,
+    backgroundColor: '#00875A',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#059669',
+    shadowColor: '#00875A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  buttonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    shadowRadius: 10,
+    elevation: 4,
+    marginTop: 8,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    marginRight: 8,
-  },
-  primaryButtonArrow: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
   },
 
   bottomSwitchRow: {
@@ -520,32 +463,21 @@ const styles = StyleSheet.create({
   bottomSwitchText: {
     fontSize: 14,
     color: '#64748B',
-    fontWeight: '500',
   },
   signInLinkText: {
     fontSize: 14,
-    color: '#059669',
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#00875A',
   },
 
   securityBadgeRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0FDF4',
     paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  securityShield: {
-    fontSize: 14,
-    marginRight: 6,
   },
   securityBadgeText: {
-    fontSize: 11,
-    color: '#166534',
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
 });

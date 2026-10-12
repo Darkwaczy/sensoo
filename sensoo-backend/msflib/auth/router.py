@@ -251,9 +251,8 @@ def router(
 
         return {
             "ok": True,
-            "message": "Password recovery code generated successfully",
-            "code": otp_code,  # Provided for seamless hackathon live demonstration
-            "expires_in": 300,
+            "message": "Verification code has been sent to your email",
+            "expires_in": 600,
         }
 
     @auth_rt.post("/verify-token")
@@ -263,10 +262,6 @@ def router(
     ) -> Any:
         email = req.email.strip()
         code = req.token.strip()
-
-        # Hackathon universal demo code is 1234
-        if code == "1234":
-            return {"valid": True, "email": email, "token": code}
 
         saved_code = keystore.get(f"otp:{email}") if (keystore and hasattr(keystore, "get")) else None
         if saved_code and str(saved_code) == code:
@@ -283,12 +278,11 @@ def router(
         session: Session = Depends(get_session),
         keystore: Any = Depends(get_keystore),
     ) -> Any:
-        # Verify code
         email = req.email.strip()
         code = req.token.strip()
         saved_code = keystore.get(f"otp:{email}") if (keystore and hasattr(keystore, "get")) else None
 
-        if code != "1234" and (not saved_code or str(saved_code) != code):
+        if not saved_code or str(saved_code) != code:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired verification token",

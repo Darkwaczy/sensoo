@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   Dimensions,
   StatusBar,
@@ -20,15 +19,11 @@ import { verifyOtpCode, resendOtpCode } from '../services/authService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function OtpScreen() {
+export default function OtpVerificationScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    destination?: string;
-    name?: string;
-    mode?: string;
-  }>();
+  const params = useLocalSearchParams<{ destination?: string; name?: string; mode?: string }>();
 
-  const destination = params.destination || '+234 801 234 5678';
+  const destination = params.destination || 'your email';
 
   const [digit1, setDigit1] = useState('');
   const [digit2, setDigit2] = useState('');
@@ -56,18 +51,10 @@ export default function OtpScreen() {
     };
   }, [countdown]);
 
-  const handleAutoFillDemo = () => {
-    setDigit1('1');
-    setDigit2('2');
-    setDigit3('3');
-    setDigit4('4');
-    ref4.current?.focus();
-  };
-
   const handleVerify = async (codeOverride?: string) => {
     const fullCode = codeOverride || `${digit1}${digit2}${digit3}${digit4}`;
     if (fullCode.length < 4) {
-      Alert.alert('Incomplete Code', 'Please enter the complete 4-digit verification code.');
+      Alert.alert('Incomplete Code', 'Please enter the 4-digit verification code sent to your email.');
       return;
     }
 
@@ -78,11 +65,11 @@ export default function OtpScreen() {
 
       if (res.success) {
         Alert.alert(
-          'Verification Successful! 🎉',
-          `Welcome to Sensoo, ${res.user?.fullName || 'Ings'}! Your identity has been verified.`,
+          'Verification Successful',
+          `Welcome to Sensoo! Your account has been verified.`,
           [
             {
-              text: 'Go to Dashboard',
+              text: 'Continue to Dashboard',
               onPress: () => router.replace('/home'),
             },
           ]
@@ -92,7 +79,7 @@ export default function OtpScreen() {
       }
     } catch (err: any) {
       setLoading(false);
-      Alert.alert('Error', err.message || 'Could not verify OTP.');
+      Alert.alert('Error', err.message || 'Could not verify code.');
     }
   };
 
@@ -106,7 +93,7 @@ export default function OtpScreen() {
       Alert.alert('Code Resent', res.message);
     } catch {
       setResending(false);
-      Alert.alert('Error', 'Could not resend OTP code.');
+      Alert.alert('Error', 'Could not resend verification code.');
     }
   };
 
@@ -118,7 +105,7 @@ export default function OtpScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent />
 
       <SafeAreaView style={styles.topSafeArea} edges={['top']}>
-        {/* Navigation Row */}
+        {/* Navigation & Header */}
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
@@ -129,13 +116,9 @@ export default function OtpScreen() {
             <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
 
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <Text style={styles.headerTitle}>Verification</Text>
 
-          <View style={{ width: 36 }} />
+          <View style={styles.headerPlaceholder} />
         </View>
       </SafeAreaView>
 
@@ -145,36 +128,19 @@ export default function OtpScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Security Shield Visual Badge */}
-        <View style={styles.visualBadgeWrapper}>
-          <View style={styles.shieldHalo}>
-            <Image
-              source={require('../../assets/3d_shield.png')}
-              style={styles.shieldImage}
-              resizeMode="contain"
-            />
-          </View>
-        </View>
-
         {/* Title Block */}
         <View style={styles.titleBlock}>
-          <Text style={styles.mainTitle}>Verify Your Identity</Text>
+          <Text style={styles.mainTitle}>Enter Verification Code</Text>
           <Text style={styles.subTitle}>
-            We have sent a 4-digit authentication code to:
+            We sent a 4-digit verification code to:
           </Text>
-          <View style={styles.destinationRow}>
-            <Text style={styles.destinationText}>{destination}</Text>
-            <TouchableOpacity onPress={() => router.back()}>
-              <Text style={styles.editDestLink}> (Edit)</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.destinationHighlight}>{destination}</Text>
         </View>
 
-        {/* 4 Digit PIN Inputs */}
-        <View style={styles.otpCard}>
-          <Text style={styles.otpCardLabel}>Enter 4-Digit Code</Text>
-          <View style={styles.inputsRow}>
-            {/* Box 1 */}
+        {/* Form Card */}
+        <View style={styles.formCard}>
+          {/* 4 Pin Input Boxes */}
+          <View style={styles.pinRow}>
             <TextInput
               ref={ref1}
               style={[styles.pinBox, digit1 ? styles.pinBoxFilled : null]}
@@ -188,7 +154,6 @@ export default function OtpScreen() {
               }}
             />
 
-            {/* Box 2 */}
             <TextInput
               ref={ref2}
               style={[styles.pinBox, digit2 ? styles.pinBoxFilled : null]}
@@ -205,7 +170,6 @@ export default function OtpScreen() {
               }}
             />
 
-            {/* Box 3 */}
             <TextInput
               ref={ref3}
               style={[styles.pinBox, digit3 ? styles.pinBoxFilled : null]}
@@ -222,7 +186,6 @@ export default function OtpScreen() {
               }}
             />
 
-            {/* Box 4 */}
             <TextInput
               ref={ref4}
               style={[styles.pinBox, digit4 ? styles.pinBoxFilled : null]}
@@ -233,7 +196,6 @@ export default function OtpScreen() {
                 setDigit4(val);
                 if (!val) ref3.current?.focus();
                 else {
-                  // Auto verify upon 4th digit
                   handleVerify(`${digit1}${digit2}${digit3}${val}`);
                 }
               }}
@@ -242,18 +204,6 @@ export default function OtpScreen() {
               }}
             />
           </View>
-
-          {/* Quick Demo Helper Hint Button */}
-          <TouchableOpacity
-            style={styles.demoCodeBadge}
-            activeOpacity={0.8}
-            onPress={handleAutoFillDemo}
-          >
-            <Text style={styles.demoCodeIcon}>⚡</Text>
-            <Text style={styles.demoCodeText}>
-              Tap to auto-fill Demo Code: <Text style={styles.demoCodeBold}>1234</Text>
-            </Text>
-          </TouchableOpacity>
 
           {/* Verify Button */}
           <TouchableOpacity
@@ -265,10 +215,7 @@ export default function OtpScreen() {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>Verify & Continue</Text>
-                <Text style={styles.primaryButtonArrow}>→</Text>
-              </View>
+              <Text style={styles.primaryButtonText}>Verify & Continue</Text>
             )}
           </TouchableOpacity>
 
@@ -294,9 +241,8 @@ export default function OtpScreen() {
 
         {/* Security Trust Footnote */}
         <View style={styles.securityBadgeRow}>
-          <Text style={styles.securityShield}>🔒</Text>
           <Text style={styles.securityBadgeText}>
-            256-Bit Encrypted One-Time Authentication
+            Protected by Sensoo Product Verification
           </Text>
         </View>
       </ScrollView>
@@ -334,8 +280,13 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     marginTop: -2,
   },
-  logo: {
-    width: 110,
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  headerPlaceholder: {
+    width: 36,
     height: 36,
   },
 
@@ -344,168 +295,90 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 10,
+    paddingTop: 20,
     paddingBottom: 40,
-  },
-
-  visualBadgeWrapper: {
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  shieldHalo: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#A7F3D0',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  shieldImage: {
-    width: 48,
-    height: 48,
   },
 
   titleBlock: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   mainTitle: {
     fontSize: 26,
     fontWeight: '800',
     color: '#0B2215',
     letterSpacing: -0.5,
-    marginBottom: 6,
+    marginBottom: 8,
     textAlign: 'center',
   },
   subTitle: {
     fontSize: 14,
     color: '#64748B',
     lineHeight: 20,
-    fontWeight: '400',
     textAlign: 'center',
   },
-  destinationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  destinationHighlight: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#00875A',
     marginTop: 4,
-  },
-  destinationText: {
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '700',
-  },
-  editDestLink: {
-    fontSize: 13,
-    color: '#059669',
-    fontWeight: '700',
+    textAlign: 'center',
   },
 
-  otpCard: {
+  formCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: '#F1F5F9',
+    padding: 24,
+    shadowColor: '#0B2215',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.04,
-    shadowRadius: 12,
+    shadowRadius: 16,
     elevation: 2,
     marginBottom: 24,
   },
-  otpCardLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    textAlign: 'center',
-    marginBottom: 16,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  inputsRow: {
+
+  pinRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
-    gap: 12,
+    alignItems: 'center',
+    marginBottom: 28,
   },
   pinBox: {
-    flex: 1,
-    height: 64,
+    width: (SCREEN_WIDTH - 48 - 48 - 36) / 4,
+    height: 60,
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
     backgroundColor: '#F8FAFC',
-    textAlign: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#0B2215',
+    textAlign: 'center',
   },
   pinBoxFilled: {
-    borderColor: '#059669',
+    borderColor: '#00875A',
     backgroundColor: '#F0FDF4',
   },
 
-  demoCodeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    marginBottom: 20,
-  },
-  demoCodeIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  demoCodeText: {
-    fontSize: 12,
-    color: '#065F46',
-    fontWeight: '600',
-  },
-  demoCodeBold: {
-    fontWeight: '900',
-    color: '#059669',
-  },
-
   primaryButton: {
-    backgroundColor: '#059669',
-    borderRadius: 14,
     height: 52,
+    backgroundColor: '#00875A',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#059669',
+    shadowColor: '#00875A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 16,
-  },
-  buttonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    shadowRadius: 10,
+    elevation: 4,
+    marginBottom: 20,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    marginRight: 8,
-  },
-  primaryButtonArrow: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
   },
 
   resendRow: {
@@ -513,38 +386,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   countdownText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#64748B',
   },
   countdownBold: {
-    color: '#0F172A',
     fontWeight: '700',
+    color: '#0F172A',
   },
   resendActiveText: {
-    fontSize: 13,
-    color: '#059669',
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#00875A',
   },
 
   securityBadgeRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
     paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  securityShield: {
-    fontSize: 13,
-    marginRight: 6,
   },
   securityBadgeText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
 });

@@ -76,7 +76,6 @@ export default function GetStartedScreen() {
           onPress={handleGetStarted}
         >
           <Text style={styles.getStartedText}>Get Started</Text>
-          <Text style={styles.getStartedArrow}>→</Text>
         </TouchableOpacity>
 
         {/* Secondary Link: Sign In */}

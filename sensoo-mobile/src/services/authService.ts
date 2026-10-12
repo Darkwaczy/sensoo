@@ -23,17 +23,10 @@ export interface AuthState {
 
 const AUTH_FILE = `${FileSystem.documentDirectory || ''}sensoo_auth_session.json`;
 
-// Default initial state
+// Default initial state: unauthenticated, real sessions only
 let currentAuth: AuthState = {
-  user: {
-    id: 'USR-DEFAULT-01',
-    fullName: 'Ings',
-    email: 'ings@example.com',
-    phone: '+234 801 234 5678',
-    isVerified: true,
-    role: 'consumer',
-  },
-  isAuthenticated: true,
+  user: null,
+  isAuthenticated: false,
 };
 
 type AuthListener = (state: AuthState) => void;
@@ -91,18 +84,23 @@ export async function registerUser(params: {
   email: string;
   phone: string;
   password?: string;
-}): Promise<{ success: boolean; otp: string; destination: string; message: string }> {
+}): Promise<{ success: boolean; destination: string; message: string }> {
   const cleanName = params.fullName.trim();
   const cleanEmail = params.email.trim().toLowerCase();
   const cleanPhone = params.phone.trim();
-  const pass = params.password || 'SensooPass2026!';
+  const pass = params.password ? params.password.trim() : '';
 
-  let otp = '1234';
-  const destination = cleanPhone || cleanEmail;
+  if (!cleanEmail) {
+    return { success: false, destination: cleanEmail, message: 'Email address is required.' };
+  }
+  if (!pass || pass.length < 6) {
+    return { success: false, destination: cleanEmail, message: 'Password must be at least 6 characters.' };
+  }
+
+  const destination = cleanEmail || cleanPhone;
   let authToken: string | undefined = undefined;
 
   try {
-    // 1. MSFLib Registration Call
     const regRes = await fetch(`${SENSOO_API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -115,30 +113,26 @@ export async function registerUser(params: {
       }),
     });
 
-    if (regRes.ok) {
-      const data = await regRes.json();
-      authToken = data.access_token;
+    const regData = await regRes.json();
+
+    if (!regRes.ok) {
+      return {
+        success: false,
+        destination,
+        message: regData.detail || 'Registration failed. Please check your details.',
+      };
     }
 
-    // 2. MSFLib OTP / Password Recovery Generator
-    const otpRes = await fetch(`${SENSOO_API_BASE_URL}/auth/password-recovery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail }),
-    });
-
-    if (otpRes.ok) {
-      const otpData = await otpRes.json();
-      if (otpData.code) {
-        otp = String(otpData.code);
-      }
-    }
-  } catch (err) {
-    console.warn('[AuthService] MSFLib backend register error, using resilient demo fallback:', err);
+    authToken = regData.access_token;
+  } catch (err: any) {
+    return {
+      success: false,
+      destination,
+      message: err.message || 'Network error connecting to Sensoo auth service.',
+    };
   }
 
   currentAuth.pendingOtpDestination = destination;
-  currentAuth.pendingOtpCode = otp;
   currentAuth.pendingUser = {
     id: `USR-${Date.now().toString().slice(-6)}`,
     fullName: cleanName,
@@ -152,7 +146,6 @@ export async function registerUser(params: {
 
   return {
     success: true,
-    otp,
     destination,
     message: `Verification code sent to ${destination}`,
   };
@@ -166,31 +159,36 @@ export async function loginUser(params: {
   identifier: string;
   password?: string;
   useOtp?: boolean;
-}): Promise<{ success: boolean; requiresOtp: boolean; message: string; otp?: string }> {
+}): Promise<{ success: boolean; requiresOtp: boolean; message: string }> {
   const id = params.identifier.trim();
   const cleanEmail = id.includes('@') ? id.toLowerCase() : `${id.replace(/\s+/g, '')}@sensoo.app`;
 
   if (params.useOtp) {
-    let otp = '1234';
     try {
       const otpRes = await fetch(`${SENSOO_API_BASE_URL}/auth/password-recovery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail }),
       });
-      if (otpRes.ok) {
-        const otpData = await otpRes.json();
-        if (otpData.code) {
-          otp = String(otpData.code);
-        }
+      const otpData = await otpRes.json();
+      if (!otpRes.ok) {
+        return {
+          success: false,
+          requiresOtp: false,
+          message: otpData.detail || 'Could not send verification code.',
+        };
       }
-    } catch {}
+    } catch (err: any) {
+      return {
+        success: false,
+        requiresOtp: false,
+        message: err.message || 'Network error requesting OTP code.',
+      };
+    }
 
     currentAuth.pendingOtpDestination = id;
-    currentAuth.pendingOtpCode = otp;
     currentAuth.pendingUser = {
-      id: `USR-${Date.now().toString().slice(-6)}`,
-      fullName: id.includes('@') ? id.split('@')[0] : 'Sensoo User',
+      fullName: id.includes('@') ? id.split('@')[0] : 'User',
       email: cleanEmail,
       phone: !id.includes('@') ? id : '',
       isVerified: false,
@@ -199,15 +197,18 @@ export async function loginUser(params: {
     return {
       success: true,
       requiresOtp: true,
-      otp,
-      message: `One-Time Passcode sent to ${id}`,
+      message: `Verification code sent to ${id}`,
     };
   }
 
-  // Password mode: call MSFLib /auth/login
-  let resolvedName = id.includes('@') ? id.split('@')[0] : 'Ings';
-  resolvedName = resolvedName.charAt(0).toUpperCase() + resolvedName.slice(1);
-  let authToken: string | undefined = undefined;
+  // Password mode: strictly validate entered password
+  if (!params.password) {
+    return {
+      success: false,
+      requiresOtp: false,
+      message: 'Please enter your password.',
+    };
+  }
 
   try {
     const loginRes = await fetch(`${SENSOO_API_BASE_URL}/auth/login`, {
@@ -216,42 +217,49 @@ export async function loginUser(params: {
       body: JSON.stringify({
         email: cleanEmail,
         username: cleanEmail,
-        password: params.password || 'SensooPass2026!',
+        password: params.password,
       }),
     });
 
-    if (loginRes.ok) {
-      const data = await loginRes.json();
-      authToken = data.access_token;
-      if (data.account && data.account.full_name) {
-        resolvedName = data.account.full_name;
-      }
+    const data = await loginRes.json();
+
+    if (!loginRes.ok) {
+      return {
+        success: false,
+        requiresOtp: false,
+        message: data.detail || 'Incorrect email or password.',
+      };
     }
-  } catch (err) {
-    console.warn('[AuthService] MSFLib backend login error, using demo bypass:', err);
+
+    const account = data.account || {};
+    currentAuth.user = {
+      id: String(account.id || `USR-${Date.now().toString().slice(-6)}`),
+      fullName: account.full_name || 'Sensoo Member',
+      email: account.email || cleanEmail,
+      phone: account.phone || '',
+      isVerified: true,
+      token: data.access_token,
+      role: (account.role as any) || 'consumer',
+      lastLogin: new Date().toISOString(),
+    };
+    currentAuth.isAuthenticated = true;
+    currentAuth.pendingOtpCode = undefined;
+    currentAuth.pendingOtpDestination = undefined;
+
+    await persistAuth();
+
+    return {
+      success: true,
+      requiresOtp: false,
+      message: 'Signed in successfully!',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      requiresOtp: false,
+      message: err.message || 'Network error during sign in.',
+    };
   }
-
-  currentAuth.user = {
-    id: `USR-${Date.now().toString().slice(-6)}`,
-    fullName: resolvedName,
-    email: cleanEmail,
-    phone: !id.includes('@') ? id : '+234 801 234 5678',
-    isVerified: true,
-    token: authToken,
-    role: 'consumer',
-    lastLogin: new Date().toISOString(),
-  };
-  currentAuth.isAuthenticated = true;
-  currentAuth.pendingOtpCode = undefined;
-  currentAuth.pendingOtpDestination = undefined;
-
-  await persistAuth();
-
-  return {
-    success: true,
-    requiresOtp: false,
-    message: 'Signed in successfully!',
-  };
 }
 
 /**
@@ -262,66 +270,78 @@ export async function verifyOtpCode(
   enteredOtp: string
 ): Promise<{ success: boolean; message: string; user?: UserProfile }> {
   const pUser = currentAuth.pendingUser || {};
-  const email = pUser.email || 'user@sensoo.app';
-  const expectedOtp = currentAuth.pendingOtpCode || '1234';
+  const email = pUser.email || '';
 
-  let isVerifiedOnBackend = false;
+  if (!email) {
+    return {
+      success: false,
+      message: 'No pending verification found. Please request a new code.',
+    };
+  }
+
   try {
     const verRes = await fetch(`${SENSOO_API_BASE_URL}/auth/verify-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: email,
-        token: enteredOtp,
+        token: enteredOtp.trim(),
       }),
     });
-    if (verRes.ok) {
-      isVerifiedOnBackend = true;
-    }
-  } catch {}
 
-  const isLocalMatch = enteredOtp === expectedOtp || enteredOtp === '1234';
-  if (!isVerifiedOnBackend && !isLocalMatch) {
+    const verData = await verRes.json();
+
+    if (!verRes.ok) {
+      return {
+        success: false,
+        message: verData.detail || 'Invalid or expired verification code.',
+      };
+    }
+
+    const newUser: UserProfile = {
+      id: pUser.id || `USR-${Date.now().toString().slice(-6)}`,
+      fullName: pUser.fullName || 'Sensoo Member',
+      email: email,
+      phone: pUser.phone || '',
+      isVerified: true,
+      token: pUser.token,
+      role: (pUser.role as any) || 'consumer',
+      createdAt: pUser.createdAt || new Date().toISOString(),
+    };
+
+    currentAuth.user = newUser;
+    currentAuth.isAuthenticated = true;
+    currentAuth.pendingOtpCode = undefined;
+    currentAuth.pendingOtpDestination = undefined;
+    currentAuth.pendingUser = undefined;
+
+    await persistAuth();
+
+    return {
+      success: true,
+      message: 'Verification successful!',
+      user: newUser,
+    };
+  } catch (err: any) {
     return {
       success: false,
-      message: 'Invalid OTP code. Please enter the 4-digit code sent to your device or use 1234.',
+      message: err.message || 'Error verifying code.',
     };
   }
-
-  const newUser: UserProfile = {
-    id: pUser.id || `USR-${Date.now().toString().slice(-6)}`,
-    fullName: pUser.fullName || 'Ings',
-    email: email,
-    phone: pUser.phone || '+234 801 234 5678',
-    isVerified: true,
-    token: pUser.token,
-    role: (pUser.role as any) || 'consumer',
-    createdAt: pUser.createdAt || new Date().toISOString(),
-  };
-
-  currentAuth.user = newUser;
-  currentAuth.isAuthenticated = true;
-  currentAuth.pendingOtpCode = undefined;
-  currentAuth.pendingOtpDestination = undefined;
-  currentAuth.pendingUser = undefined;
-
-  await persistAuth();
-
-  return {
-    success: true,
-    message: 'Verification successful!',
-    user: newUser,
-  };
 }
 
 /**
- * Resend OTP code
+ * Resend OTP code via Resend API
  * POST /api/v1/auth/password-recovery
  */
-export async function resendOtpCode(): Promise<{ success: boolean; otp: string; message: string }> {
+export async function resendOtpCode(): Promise<{ success: boolean; message: string }> {
   const pUser = currentAuth.pendingUser || {};
-  const email = pUser.email || 'user@sensoo.app';
-  let otp = '1234';
+  const email = pUser.email || '';
+  const dest = currentAuth.pendingOtpDestination || email || 'your email';
+
+  if (!email) {
+    return { success: false, message: 'No registered email found to resend code.' };
+  }
 
   try {
     const otpRes = await fetch(`${SENSOO_API_BASE_URL}/auth/password-recovery`, {
@@ -329,19 +349,22 @@ export async function resendOtpCode(): Promise<{ success: boolean; otp: string; 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
-    if (otpRes.ok) {
-      const data = await otpRes.json();
-      if (data.code) otp = String(data.code);
-    }
-  } catch {}
+    const data = await otpRes.json();
 
-  currentAuth.pendingOtpCode = otp;
-  const dest = currentAuth.pendingOtpDestination || 'your device';
-  return {
-    success: true,
-    otp,
-    message: `A new code has been sent to ${dest}`,
-  };
+    if (!otpRes.ok) {
+      return { success: false, message: data.detail || 'Could not resend code.' };
+    }
+
+    return {
+      success: true,
+      message: `A new verification code has been sent to ${dest}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Network error resending code.',
+    };
+  }
 }
 
 /**
