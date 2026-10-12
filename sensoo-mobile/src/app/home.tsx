@@ -609,7 +609,7 @@ export default function HomeScreen() {
   const [agentChat, setAgentChat] = useState<{ sender: 'agent' | 'user'; text: string }[]>([
     {
       sender: 'agent',
-      text: 'Hello Ings! I am Sensoo Agentic AI. How can I help verify your products, guide your safety, or find clinics today?',
+      text: `Hello ${currentUser?.fullName ? currentUser.fullName.split(' ')[0] : 'there'}! I am Sensoo Agentic AI. How can I help verify your products, guide your safety, or find clinics today?`,
     },
   ]);
 
@@ -758,7 +758,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <Text style={styles.avatarText}>
-                    {(currentUser?.fullName || 'Ings').charAt(0).toUpperCase()}
+                    {(currentUser?.fullName || 'User').charAt(0).toUpperCase()}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -771,7 +771,7 @@ export default function HomeScreen() {
               <Text style={styles.greetingTitle}>
                 <Text style={styles.greetingBlack}>Good morning, </Text>
                 <Text style={styles.greetingGreen}>
-                  {currentUser?.fullName ? currentUser.fullName.split(' ')[0] : 'Ings'}
+                  {currentUser?.fullName ? currentUser.fullName.split(' ')[0] : 'User'}
                 </Text>
               </Text>
               <Text style={styles.greetingSubtitle}>Verify a product before you buy or use it.</Text>
@@ -1441,10 +1441,14 @@ export default function HomeScreen() {
             {/* Centered Avatar and User Header */}
             <View style={styles.profileHeaderBlock}>
               <View style={styles.profileAvatarLarge}>
-                <Text style={styles.profileAvatarTextLarge}>I</Text>
+                <Text style={styles.profileAvatarTextLarge}>
+                  {(currentUser?.fullName || 'User').charAt(0).toUpperCase()}
+                </Text>
               </View>
-              <Text style={styles.profileName}>Ings</Text>
-              <Text style={styles.profileRole}>Account holder</Text>
+              <Text style={styles.profileName}>{currentUser?.fullName || 'User'}</Text>
+              <Text style={styles.profileRole}>
+                {currentUser?.email || 'Account holder'}
+              </Text>
             </View>
 
             {/* Menu Items List */}
@@ -2109,7 +2113,7 @@ export default function HomeScreen() {
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Linked Account</Text>
                 <Text style={styles.modalInfoValue}>
-                  {deviceInfo?.linkedAccount || 'Ings (Primary Holder)'}
+                  {deviceInfo?.linkedAccount || `${currentUser?.fullName || 'User'} (Primary Holder)`}
                 </Text>
               </View>
 
@@ -2148,7 +2152,7 @@ export default function HomeScreen() {
             <View style={styles.modalBody}>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Full Name</Text>
-                <Text style={styles.modalInfoValue}>Ings</Text>
+                <Text style={styles.modalInfoValue}>{currentUser?.fullName || 'User'}</Text>
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Account Status</Text>
@@ -2156,7 +2160,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Email</Text>
-                <Text style={styles.modalInfoValue}>ings@sensoo.app</Text>
+                <Text style={styles.modalInfoValue}>{currentUser?.email || 'N/A'}</Text>
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Phone Number</Text>

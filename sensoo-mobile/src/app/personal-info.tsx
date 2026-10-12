@@ -13,15 +13,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { subscribeAuth, updateProfile } from '../services/authService';
+import { subscribeAuth, updateProfile, getCurrentUser } from '../services/authService';
 
 export default function PersonalInformationScreen() {
   const router = useRouter();
 
+  const user = getCurrentUser();
+
   // Profile data state
-  const [fullName, setFullName] = useState('Ings');
-  const [email, setEmail] = useState('ings@example.com');
-  const [phone, setPhone] = useState('+234 801 234 5678');
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
 
   useEffect(() => {
     const unsub = subscribeAuth((state) => {
@@ -40,9 +42,9 @@ export default function PersonalInformationScreen() {
   >('NONE');
 
   // Temporary edit states
-  const [tempName, setTempName] = useState('Ings');
-  const [tempEmail, setTempEmail] = useState('ings@example.com');
-  const [tempPhone, setTempPhone] = useState('+234 801 234 5678');
+  const [tempName, setTempName] = useState(user?.fullName || '');
+  const [tempEmail, setTempEmail] = useState(user?.email || '');
+  const [tempPhone, setTempPhone] = useState(user?.phone || '');
 
   // Password fields state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -68,7 +70,7 @@ export default function PersonalInformationScreen() {
   };
 
   const handleSaveName = async () => {
-    const val = tempName.trim() || 'Ings';
+    const val = tempName.trim() || (user?.fullName || 'User');
     setFullName(val);
     await updateProfile({ fullName: val }).catch(() => {});
     setActiveModal('NONE');
@@ -158,7 +160,9 @@ export default function PersonalInformationScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>H</Text>
+              <Text style={styles.avatarText}>
+                {(fullName || 'User').charAt(0).toUpperCase()}
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.cameraBadgeBtn}

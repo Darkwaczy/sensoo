@@ -19,12 +19,12 @@ import {
   VoiceAssistantSettings,
 } from '../services/voiceAssistantService';
 import { getCurrentUserLocation } from '../services/clinicService';
-import { subscribeAuth, logoutUser, UserProfile } from '../services/authService';
+import { subscribeAuth, logoutUser, UserProfile, getCurrentUser } from '../services/authService';
 
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(getCurrentUser());
   const [voiceSettings, setVoiceSettings] = useState<VoiceAssistantSettings>(getVoiceAssistantSettings());
   const [showPersonalInfoModal, setShowPersonalInfoModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -98,10 +98,10 @@ export default function ProfileScreen() {
         <View style={styles.profileHeaderBlock}>
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarTextLarge}>
-              {(currentUser?.fullName || 'Ings').charAt(0).toUpperCase()}
+              {(currentUser?.fullName || 'User').charAt(0).toUpperCase()}
             </Text>
           </View>
-          <Text style={styles.profileName}>{currentUser?.fullName || 'Ings'}</Text>
+          <Text style={styles.profileName}>{currentUser?.fullName || 'User'}</Text>
           <Text style={styles.profileRole}>
             {currentUser?.email || 'Account holder'}
           </Text>
@@ -335,7 +335,7 @@ export default function ProfileScreen() {
             <View style={styles.modalBody}>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Full Name</Text>
-                <Text style={styles.modalInfoValue}>Ings</Text>
+                <Text style={styles.modalInfoValue}>{currentUser?.fullName || 'User'}</Text>
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Account Status</Text>
@@ -343,11 +343,11 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Email</Text>
-                <Text style={styles.modalInfoValue}>ings@sensoo.app</Text>
+                <Text style={styles.modalInfoValue}>{currentUser?.email || 'N/A'}</Text>
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Phone Number</Text>
-                <Text style={styles.modalInfoValue}>+234 802 345 6789</Text>
+                <Text style={styles.modalInfoValue}>{currentUser?.phone || 'N/A'}</Text>
               </View>
               <View style={styles.modalInfoRow}>
                 <Text style={styles.modalInfoLabel}>Registered Region</Text>

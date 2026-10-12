@@ -27,6 +27,7 @@ import {
 import { sendAgentMessage } from '../services/sensooAiService';
 import { parseVoiceCommand, transcribeAudioWithGroq } from '../services/voiceAssistantService';
 import { ClinicData, getNearbyClinics, getCurrentUserLocation } from '../services/clinicService';
+import { getCurrentUser } from '../services/authService';
 
 type AgentScreen =
   | 'home'
@@ -1486,7 +1487,9 @@ export default function AgentScreenComponent() {
 
                 {/* Greeting Block */}
                 <View style={styles.agentGreetingBlock}>
-                  <Text style={styles.agentGreetingTitle}>Hi, Ings</Text>
+                  <Text style={styles.agentGreetingTitle}>
+                    Hi, {getCurrentUser()?.fullName ? getCurrentUser()!.fullName.split(' ')[0] : 'there'}
+                  </Text>
                   <Text style={styles.agentGreetingSub}>How can I help you today?</Text>
                   <Text style={styles.agentGreetingDesc}>
                     I can explain your scans, give safety guidance,{'\n'}find nearby clinics and help you report{'\n'}suspicious products.

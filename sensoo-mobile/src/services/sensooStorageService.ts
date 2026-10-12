@@ -100,7 +100,7 @@ export async function getPersistentDeviceId(): Promise<string> {
     deviceName: Device.deviceName || 'Personal Device',
     osName: Device.osName || 'Android',
     osVersion: Device.osVersion || '14',
-    linkedAccount: 'Ings (Primary Holder)',
+    linkedAccount: 'Verified Account (Primary Holder)',
     linkedAt: new Date().toISOString(),
     status: 'LINKED',
   };
@@ -136,7 +136,7 @@ export async function getDeviceLinkInfo(): Promise<DeviceLinkInfo> {
     deviceName: Device.deviceName || 'Personal Device',
     osName: Device.osName || 'Android',
     osVersion: Device.osVersion || '14',
-    linkedAccount: 'Ings (Primary Holder)',
+    linkedAccount: 'Verified Account (Primary Holder)',
     linkedAt: new Date().toISOString(),
     status: 'LINKED',
   };
