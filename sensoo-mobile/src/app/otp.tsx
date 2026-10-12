@@ -70,11 +70,11 @@ export default function OtpVerificationScreen() {
       if (res.success) {
         Alert.alert(
           'Verification Successful',
-          `Welcome to Sensoo! Your account has been verified.`,
+          `Welcome to Sensoo! Your account has been verified. Let's set up your permissions to start verifying products.`,
           [
             {
-              text: 'Continue to Dashboard',
-              onPress: () => router.replace('/home'),
+              text: 'Continue',
+              onPress: () => router.replace('/permissions' as any),
             },
           ]
         );

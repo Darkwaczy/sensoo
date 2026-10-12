@@ -20,11 +20,7 @@ export default function CameraPermissionScreen() {
 
   const handleAllowAccess = async () => {
     const res = await requestPermission();
-    if (res.granted) {
-      router.replace('/scanner');
-    } else {
-      router.back();
-    }
+    router.replace('/permissions' as any);
   };
 
   return (

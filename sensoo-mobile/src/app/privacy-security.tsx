@@ -163,14 +163,7 @@ export default function PrivacySecurityScreen() {
         <TouchableOpacity
           style={styles.itemCard}
           activeOpacity={0.75}
-          onPress={() =>
-            setInfoModal({
-              visible: true,
-              title: 'App Permissions',
-              content:
-                '• Camera: Required to scan barcodes and QR codes on packaging.\n• Location: Used for regional authenticity checks and impossible-travel detection.\n• Notifications: Informs you of counterfeit flags or verified batch updates.',
-            })
-          }
+          onPress={() => router.push('/permissions' as any)}
         >
           <View style={[styles.iconBox, { backgroundColor: '#EAF7EE' }]}>
             <Image

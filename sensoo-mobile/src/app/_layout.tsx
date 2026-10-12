@@ -23,6 +23,7 @@ export default function RootLayout() {
         <Stack.Screen name="signin" />
         <Stack.Screen name="signup" />
         <Stack.Screen name="otp" />
+        <Stack.Screen name="permissions" />
         <Stack.Screen name="home" />
         <Stack.Screen name="scanner" />
         <Stack.Screen name="checking" />

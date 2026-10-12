@@ -10,15 +10,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LocationPermissionScreen() {
   const router = useRouter();
 
-  const handleAllowAccess = () => {
-    // In mobile, save regional preference or proceed
-    router.replace('/scanner');
+  const handleAllowAccess = async () => {
+    try {
+      await Location.requestForegroundPermissionsAsync();
+    } catch {}
+    router.replace('/permissions' as any);
   };
 
   return (
