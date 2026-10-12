@@ -310,58 +310,9 @@ export default function ResultScreen() {
             <Text style={styles.backChevronText}>‹</Text>
           </TouchableOpacity>
 
-          <View style={styles.scenarioChipsContainer}>
-            {(['AUTHENTIC', 'COUNTERFEIT', 'ALREADY_PURCHASED', 'IMPOSSIBLE_TRAVEL', 'WRONG_REGION'] as ScenarioType[]).map(
-              (sc) => (
-                <TouchableOpacity
-                  key={sc}
-                  style={[
-                    styles.scenarioSelectorChip,
-                    activeScenario === sc && styles.scenarioSelectorChipActive,
-                  ]}
-                  onPress={() => setActiveScenario(sc)}
-                >
-                  <Text
-                    style={[
-                      styles.scenarioSelectorText,
-                      activeScenario === sc && styles.scenarioSelectorTextActive,
-                    ]}
-                  >
-                    {sc === 'AUTHENTIC'
-                      ? '✓ Authentic'
-                      : sc === 'COUNTERFEIT'
-                      ? '🚨 Fake'
-                      : sc === 'ALREADY_PURCHASED'
-                      ? '⚠️ Cloned'
-                      : sc === 'IMPOSSIBLE_TRAVEL'
-                      ? '✈️ Travel'
-                      : '🌐 Region'}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-            <TouchableOpacity
-              style={styles.scenarioSelectorChip}
-              onPress={() => router.push({ pathname: '/product-not-found', params: { code: params.code } })}
-            >
-              <Text style={styles.scenarioSelectorText}>🔍 Not Found</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.scenarioSelectorChip}
-              onPress={() => router.push({ pathname: '/verification-unavailable', params: { code: params.code } })}
-            >
-              <Text style={styles.scenarioSelectorText}>📶 Offline</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.headerTitleCenter}>Verification Result</Text>
 
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.7}
-            onPress={() => {}}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.moreDotsText}>⋮</Text>
-          </TouchableOpacity>
+          <View style={{ width: 36 }} />
         </View>
       </SafeAreaView>
 
@@ -711,6 +662,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: '#0F172A',
     fontWeight: '700',
+  },
+  headerTitleCenter: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0B2215',
   },
 
   /* Quick Scenario Switcher (for Judge & Demo Testing) */
