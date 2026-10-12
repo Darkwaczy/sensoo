@@ -129,11 +129,27 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
       ? `${cleanCode.slice(0, 2)} ${cleanCode.slice(2)}`
       : cleanCode;
 
+  let firstName = 'there';
+  if (userName && userName.trim()) {
+    const parts = userName.trim().split(/\s+/);
+    if (parts.length > 0 && parts[0]) {
+      firstName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    }
+  } else if (toEmail && toEmail.trim()) {
+    const local = toEmail.trim().split('@')[0];
+    const cleaned = local.replace(/[._+-]/g, ' ').split(/\s+/)[0];
+    if (cleaned) {
+      firstName = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+  }
+
   const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
   <title>Your Sensoo verification code</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #F3F4F3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
@@ -153,11 +169,11 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
           <tr>
             <td style="padding: 28px 28px 20px 28px;">
               
-              <!-- Brand Header Row -->
+              <!-- Brand Header Row (100% transparent logo for seamless light/dark mode) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 22px;">
                 <tr>
                   <td align="left" valign="middle" style="width: 50%;">
-                    <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/logo.png" alt="Sensoo" width="138" style="display: block; border: 0; width: 138px; height: auto; outline: none;" />
+                    <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/logo_v2.png" alt="Sensoo" width="138" style="display: block; border: 0; width: 138px; height: auto; outline: none;" />
                   </td>
                   <td align="right" valign="middle" style="width: 50%;">
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 700; color: #0C3823; letter-spacing: 1.5px; line-height: 1.35; text-transform: uppercase;">
@@ -178,7 +194,7 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
                       Here is your<br />verification code
                     </h1>
                     <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.45; color: #475569;">
-                      Enter this code on Sensoo to complete your signup.
+                      Hi <strong style="color: #0B2215; font-weight: 700;">${firstName}</strong>, enter this code on Sensoo to complete your signup.
                     </p>
                   </td>
                   <td align="right" valign="middle" style="width: 46%;">
@@ -194,17 +210,17 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                       <tr>
                         <td align="left" valign="middle">
-                          <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 35px; font-weight: 800; color: #0B2215; letter-spacing: 4px; display: inline-block; line-height: 1;">
+                          <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 35px; font-weight: 800; color: #0B2215; letter-spacing: 4px; display: inline-block; line-height: 1; user-select: all; -webkit-user-select: all; -moz-user-select: all; cursor: pointer;">
                             ${formattedCode}
                           </span>
                         </td>
                         <td align="right" valign="middle">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="display: inline-table;">
                             <tr>
-                              <td style="background-color: #032B20; border-radius: 8px; padding: 11px 18px; text-align: center;">
-                                <span style="color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap; display: inline-block;">
+                              <td style="background-color: #032B20; border-radius: 8px; padding: 0; text-align: center;">
+                                <a href="https://sensoo-app-final-2.onrender.com/copy?code=${cleanCode}" target="_blank" style="display: inline-block; background-color: #032B20; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; text-decoration: none; padding: 11px 18px; border-radius: 8px; white-space: nowrap; cursor: pointer;">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy code
-                                </span>
+                                </a>
                               </td>
                             </tr>
                           </table>

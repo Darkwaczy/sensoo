@@ -92,3 +92,75 @@ def root():
         "auth_engine": "msflib-fastapi",
         "version": "1.0.0",
     }
+
+
+@app.get("/copy")
+@app.get("/api/v1/auth/copy")
+def copy_otp_handler(code: str = ""):
+    from fastapi.responses import HTMLResponse
+    clean_code = str(code).strip()
+    return HTMLResponse(content=f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verification Code Copied - Sensoo</title>
+  <style>
+    body {{
+      margin: 0; padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #F3F4F3; color: #0B2215;
+      display: flex; align-items: center; justify-content: center; min-height: 90vh;
+    }}
+    .card {{
+      background: #FFFFFF; border-radius: 20px; padding: 36px 28px;
+      max-width: 400px; width: 100%; text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.06); border: 1px solid #E2E8E4;
+    }}
+    .badge {{
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 56px; height: 56px; background-color: #E7F0ED; border-radius: 50%;
+      margin-bottom: 16px; color: #032B20; font-size: 26px; font-weight: bold;
+    }}
+    .code-box {{
+      background-color: #E7F0ED; border-radius: 12px; padding: 14px 20px;
+      font-size: 32px; font-weight: 800; letter-spacing: 4px; color: #0B2215;
+      margin: 18px 0;
+    }}
+    .status {{
+      color: #166534; font-weight: 700; font-size: 14px; margin-bottom: 18px;
+    }}
+    .btn {{
+      display: inline-block; background-color: #032B20; color: #FFFFFF;
+      text-decoration: none; padding: 13px 26px; border-radius: 10px;
+      font-weight: 600; font-size: 14px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">✓</div>
+    <h2 style="margin: 0 0 6px 0; font-size: 20px;">Code Copied!</h2>
+    <p style="margin: 0; color: #64748B; font-size: 13.5px;">Your Sensoo verification code was copied to clipboard.</p>
+    <div class="code-box">{clean_code}</div>
+    <div class="status" id="statusMsg">✓ Copied to clipboard</div>
+    <a href="sensoo://verify?code={clean_code}" class="btn">Return to Sensoo App</a>
+  </div>
+  <script>
+    const code = "{clean_code}";
+    if (code) {{
+      navigator.clipboard.writeText(code).then(() => {{
+        document.getElementById('statusMsg').innerText = '✓ Copied to clipboard';
+      }}).catch(() => {{
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }});
+    }}
+  </script>
+</body>
+</html>""")
+
