@@ -217,10 +217,10 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
                         <td align="right" valign="middle">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="display: inline-table;">
                             <tr>
-                              <td style="background-color: #032B20; border-radius: 8px; padding: 0; text-align: center;">
-                                <a href="https://sensoo-app-final-2.onrender.com/copy?code=${cleanCode}" target="_blank" style="display: inline-block; background-color: #032B20; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; text-decoration: none; padding: 11px 18px; border-radius: 8px; white-space: nowrap; cursor: pointer;">
+                              <td style="background-color: #032B20; border-radius: 8px; padding: 11px 18px; text-align: center;">
+                                <span style="color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; display: inline-block;">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy code
-                                </a>
+                                </span>
                               </td>
                             </tr>
                           </table>
