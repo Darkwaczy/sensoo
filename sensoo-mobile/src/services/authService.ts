@@ -105,7 +105,7 @@ async function saveLocalUser(user: { email: string; fullName: string; phone: str
  */
 async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?: string): Promise<boolean> {
   let fallbackKey = '';
-  let fallbackFrom = 'Sensoo Security <verify@inboxsync.co.uk>';
+  let fallbackFrom = 'Sensoo <verify@inboxsync.co.uk>';
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const local = require('./localResendKey');
@@ -121,31 +121,196 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
     return false;
   }
 
-  const displayName = userName || 'Valued User';
-  const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Sensoo Verification</title></head>
-<body style="margin: 0; padding: 24px; background-color: #F8FAFC; font-family: sans-serif; color: #1E293B;">
-  <div style="max-width: 480px; margin: 0 auto; background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; overflow: hidden;">
-    <div style="background: linear-gradient(135deg, #0F766E 0%, #00875A 100%); padding: 28px 24px; text-align: center;">
-      <h1 style="margin: 0; color: #FFFFFF; font-size: 24px; letter-spacing: 2px;">SENSOO</h1>
-      <p style="margin: 4px 0 0; color: rgba(255,255,255,0.85); font-size: 12px; text-transform: uppercase;">Product Authenticity &amp; Verification</p>
-    </div>
-    <div style="padding: 28px 24px;">
-      <h2 style="margin: 0 0 12px; font-size: 18px; color: #0F172A;">Verify Your Account</h2>
-      <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5; color: #475569;">
-        Hello <strong>${displayName}</strong>,<br>
-        Use the 4-digit verification code below to complete sign-in:
-      </p>
-      <div style="background-color: #F0FDF4; border: 2px dashed #00875A; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 24px;">
-        <span style="font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #00875A; font-family: monospace;">${otpCode}</span>
-        <span style="display: block; font-size: 11px; color: #047857; margin-top: 6px;">Valid for 10 minutes</span>
-      </div>
-      <p style="margin: 0; font-size: 12px; color: #94A3B8; text-align: center;">
-        If you did not make this request, you can safely ignore this email.
-      </p>
-    </div>
+  const cleanCode = String(otpCode).trim();
+  const formattedCode =
+    cleanCode.length === 6
+      ? `${cleanCode.slice(0, 3)} ${cleanCode.slice(3)}`
+      : cleanCode.length === 4
+      ? `${cleanCode.slice(0, 2)} ${cleanCode.slice(2)}`
+      : cleanCode;
+
+  const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Sensoo verification code</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F3F4F3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
+  
+  <!-- Preheader Snippet for Inbox Preview (Matches Gmail preview pane) -->
+  <div style="display: none; font-size: 1px; color: #FFFFFF; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    Your Sensoo verification code is ${formattedCode}. Enter this code on Sensoo to complete your signup.
   </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F3F4F3; padding: 32px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Main White/Ivory Card Container -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 580px; width: 100%; background-color: #F7F6F2; border-radius: 20px; overflow: hidden; border: 1px solid #E2E6E2; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);">
+          
+          <!-- Inner Content Padding -->
+          <tr>
+            <td style="padding: 28px 28px 20px 28px;">
+              
+              <!-- Brand Header Row -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 22px;">
+                <tr>
+                  <td align="left" valign="middle" style="width: 50%;">
+                    <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/logo.png" alt="Sensoo" width="138" style="display: block; border: 0; width: 138px; height: auto; outline: none;" />
+                  </td>
+                  <td align="right" valign="middle" style="width: 50%;">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 700; color: #0C3823; letter-spacing: 1.5px; line-height: 1.35; text-transform: uppercase;">
+                      TRUSTED PRODUCTS.<br />HEALTHIER PEOPLE.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Hero Row -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+                <tr>
+                  <td align="left" valign="middle" style="width: 54%; padding-right: 12px;">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; color: #2E7D32; letter-spacing: 1.8px; text-transform: uppercase; margin-bottom: 8px;">
+                      VERIFY YOUR EMAIL
+                    </div>
+                    <h1 style="margin: 0 0 10px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 27px; font-weight: 800; color: #0B2215; line-height: 1.15; letter-spacing: -0.5px;">
+                      Here is your<br />verification code
+                    </h1>
+                    <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.45; color: #475569;">
+                      Enter this code on Sensoo to complete your signup.
+                    </p>
+                  </td>
+                  <td align="right" valign="middle" style="width: 46%;">
+                    <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/hero_clean.png" alt="Sensoo Verification" width="235" style="display: block; border: 0; width: 100%; max-width: 235px; height: auto; border-radius: 18px; outline: none;" />
+                  </td>
+                </tr>
+              </table>
+
+              <!-- OTP Verification Code Box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #E7F0ED; border-radius: 14px; margin-bottom: 14px;">
+                <tr>
+                  <td style="padding: 16px 22px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="left" valign="middle">
+                          <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 35px; font-weight: 800; color: #0B2215; letter-spacing: 4px; display: inline-block; line-height: 1;">
+                            ${formattedCode}
+                          </span>
+                        </td>
+                        <td align="right" valign="middle">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="display: inline-table;">
+                            <tr>
+                              <td style="background-color: #032B20; border-radius: 8px; padding: 11px 18px; text-align: center;">
+                                <span style="color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap; display: inline-block;">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 5px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy code
+                                </span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Expiry / Notice Box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F1F6F2; border: 1px solid #DCE6DF; border-radius: 12px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 14px 18px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="left" valign="middle" style="width: 28px;">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B2215" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                          </svg>
+                        </td>
+                        <td align="left" valign="middle" style="padding-left: 10px;">
+                          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #0B2215; margin-bottom: 2px;">
+                            This code will expire in 10 minutes.
+                          </div>
+                          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; color: #64748B; line-height: 1.35;">
+                            If you did not create a Sensoo account, you can safely ignore this email.
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- 4 Benefit Badges Row (Shield, People, Heart, Pillar) -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 12px;">
+                <tr>
+                  <!-- Badge 1: Safer Consumers -->
+                  <td align="center" valign="top" style="width: 25%; padding: 4px 6px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B2215" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto 6px auto;">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                      <path d="m9 12 2 2 4-4"></path>
+                    </svg>
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; font-weight: 700; color: #0B2215; line-height: 1.25; text-align: center;">
+                      Safer<br /><span style="font-weight: 400; color: #334155;">Consumers</span>
+                    </div>
+                  </td>
+
+                  <!-- Badge 2: Cleaner Markets -->
+                  <td align="center" valign="top" style="width: 25%; padding: 4px 6px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B2215" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto 6px auto;">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; font-weight: 700; color: #0B2215; line-height: 1.25; text-align: center;">
+                      Cleaner<br /><span style="font-weight: 400; color: #334155;">Markets</span>
+                    </div>
+                  </td>
+
+                  <!-- Badge 3: Stronger Public Health -->
+                  <td align="center" valign="top" style="width: 25%; padding: 4px 6px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B2215" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto 6px auto;">
+                      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+                    </svg>
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; font-weight: 700; color: #0B2215; line-height: 1.25; text-align: center;">
+                      Stronger<br /><span style="font-weight: 400; color: #334155;">Public Health</span>
+                    </div>
+                  </td>
+
+                  <!-- Badge 4: Supports Regulators -->
+                  <td align="center" valign="top" style="width: 25%; padding: 4px 6px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B2215" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto 6px auto;">
+                      <path d="m3 9 9-7 9 7v2H3z"></path>
+                      <path d="M4 11v9"></path>
+                      <path d="M8 11v9"></path>
+                      <path d="M12 11v9"></path>
+                      <path d="M16 11v9"></path>
+                      <path d="M20 11v9"></path>
+                      <path d="M2 20h20"></path>
+                    </svg>
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; font-weight: 700; color: #0B2215; line-height: 1.25; text-align: center;">
+                      Supports<br /><span style="font-weight: 400; color: #334155;">Regulators</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Full Width Deep Forest Green Footer Banner -->
+          <tr>
+            <td style="padding: 0; margin: 0; line-height: 0;">
+              <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/footer.png" alt="Sensoo - Trusted Products. Healthier People." width="580" style="display: block; border: 0; width: 100%; max-width: 580px; height: auto; outline: none; border-radius: 0 0 20px 20px;" />
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>`;
 
@@ -159,7 +324,7 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
       body: JSON.stringify({
         from: from,
         to: [toEmail.trim()],
-        subject: 'Your Sensoo Verification Code',
+        subject: 'Your Sensoo verification code',
         html,
       }),
     });
@@ -194,7 +359,7 @@ export async function registerUser(params: {
   const destination = cleanEmail;
   let authToken: string | undefined = undefined;
   let backendSuccess = false;
-  const localOtp = `${Math.floor(1000 + Math.random() * 9000)}`;
+  const localOtp = `${Math.floor(100000 + Math.random() * 900000)}`;
 
   try {
     const regRes = await fetch(`${SENSOO_API_BASE_URL}/auth/register`, {
@@ -273,7 +438,7 @@ export async function loginUser(params: {
   const cleanEmail = id.includes('@') ? id.toLowerCase() : `${id.replace(/\s+/g, '')}@sensoo.app`;
 
   if (params.useOtp) {
-    const localOtp = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const localOtp = `${Math.floor(100000 + Math.random() * 900000)}`;
     let backendOtpSent = false;
 
     try {
@@ -493,7 +658,7 @@ export async function resendOtpCode(): Promise<{ success: boolean; message: stri
     return { success: false, message: 'No registered email found to resend code.' };
   }
 
-  const localOtp = `${Math.floor(1000 + Math.random() * 9000)}`;
+  const localOtp = `${Math.floor(100000 + Math.random() * 900000)}`;
   let backendSent = false;
 
   try {

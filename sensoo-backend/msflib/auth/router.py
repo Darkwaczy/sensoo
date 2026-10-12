@@ -89,7 +89,7 @@ def router(
         session.refresh(account)
 
         # Store initial OTP for email verification
-        reg_otp = f"{random.randint(1000, 9999)}"
+        reg_otp = f"{random.randint(100000, 999999)}"
         keystore = getattr(request.app.state, "keystore", None)
         try:
             from app.main import get_keystore
@@ -234,7 +234,7 @@ def router(
         account = session.exec(
             select(account_type).where(account_type.email == req.email.strip())
         ).first()
-        otp_code = f"{random.randint(1000, 9999)}"
+        otp_code = f"{random.randint(100000, 999999)}"
         if keystore is not None and hasattr(keystore, "set"):
             keystore.set(f"otp:{req.email.strip()}", otp_code)
 
