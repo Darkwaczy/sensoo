@@ -34,6 +34,8 @@ yarn-error.*
 .env
 .env*.local
 !.env.example
+src/services/localResendKey.ts
+src/services/localResendKey.js
 
 # typescript
 *.tsbuildinfo

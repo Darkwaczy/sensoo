@@ -78,10 +78,22 @@ async function persistAuth(): Promise<void> {
  * Dispatch branded Sensoo verification OTP email via Resend API
  */
 async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?: string): Promise<boolean> {
-  const key = process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
-  const from = (process.env.EXPO_PUBLIC_RESEND_FROM || 'Sensoo Security <verify@inboxsync.co.uk>').replace(/^"|"$/g, '');
+  let fallbackKey = '';
+  let fallbackFrom = 'Sensoo Security <verify@inboxsync.co.uk>';
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const local = require('./localResendKey');
+    fallbackKey = local.LOCAL_RESEND_KEY || '';
+    fallbackFrom = local.LOCAL_RESEND_FROM || fallbackFrom;
+  } catch {}
 
-  if (!key || !toEmail) return false;
+  const key = process.env.EXPO_PUBLIC_RESEND_API_KEY || fallbackKey;
+  const from = (process.env.EXPO_PUBLIC_RESEND_FROM || fallbackFrom).replace(/^"|"$/g, '');
+
+  if (!key || !toEmail) {
+    console.warn('[AuthService] Resend API key or email missing, key present:', Boolean(key));
+    return false;
+  }
 
   const displayName = userName || 'Valued User';
   const html = `<!DOCTYPE html>
