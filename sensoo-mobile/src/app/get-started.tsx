@@ -25,10 +25,6 @@ export default function GetStartedScreen() {
     router.push('/signin' as any);
   };
 
-  const handleContinueAsGuest = () => {
-    router.replace('/home' as any);
-  };
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent />
@@ -41,13 +37,6 @@ export default function GetStartedScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
-          <TouchableOpacity
-            style={styles.guestPill}
-            activeOpacity={0.7}
-            onPress={handleContinueAsGuest}
-          >
-            <Text style={styles.guestText}>Guest</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
@@ -60,16 +49,12 @@ export default function GetStartedScreen() {
         />
       </View>
 
-      {/* Bottom Content Area: transparent background so image gradient melts into pure screen white */}
+      {/* Bottom Content Area */}
       <View style={styles.contentContainer}>
-        {/* Headings - Reduced refined font size */}
-        <Text style={styles.headingBlack}>Know what</Text>
-        <Text style={styles.headingGreen}>you’re buying.</Text>
-
         {/* Subtitle */}
         <Text style={styles.subtitle}>Scan and verify products instantly.</Text>
 
-        {/* Action Button: Get Started → */}
+        {/* Action Button: Get Started */}
         <TouchableOpacity
           style={styles.getStartedButton}
           activeOpacity={0.85}
@@ -127,38 +112,20 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  /* Bottom Content Area - Transparent so gradient shines through */
+  /* Bottom Content Area */
   contentContainer: {
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingBottom: Platform.OS === 'ios' ? 28 : 36,
-    marginTop: -48,
     backgroundColor: 'transparent',
   },
-  headingBlack: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#0B2215',
-    textAlign: 'center',
-    letterSpacing: -0.8,
-    lineHeight: 38,
-  },
-  headingGreen: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#155E38',
-    textAlign: 'center',
-    letterSpacing: -0.8,
-    lineHeight: 38,
-  },
   subtitle: {
-    fontSize: 15.5,
-    lineHeight: 22,
-    color: '#5C7467',
+    fontSize: 16.5,
+    lineHeight: 24,
+    color: '#334D40',
     textAlign: 'center',
-    fontWeight: '400',
+    fontWeight: '600',
     letterSpacing: -0.2,
-    marginTop: 8,
   },
 
   /* Full-width Pill Button */
