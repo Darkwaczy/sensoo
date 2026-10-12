@@ -115,7 +115,7 @@ async def send_otp_via_resend(
     payload = {
         "from": sender,
         "to": [to_email.strip()],
-        "subject": f"Your Sensoo Verification Code is {otp_code}",
+        "subject": "Your Sensoo Verification Code",
         "html": html_content,
     }
 

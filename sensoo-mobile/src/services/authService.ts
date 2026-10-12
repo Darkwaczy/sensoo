@@ -18,10 +18,11 @@ export interface AuthState {
   isAuthenticated: boolean;
   pendingOtpDestination?: string;
   pendingOtpCode?: string;
-  pendingUser?: Partial<UserProfile>;
+  pendingUser?: Partial<UserProfile> & { password?: string };
 }
 
 const AUTH_FILE = `${FileSystem.documentDirectory || ''}sensoo_auth_session.json`;
+const USERS_DB_FILE = `${FileSystem.documentDirectory || ''}sensoo_users_db.json`;
 
 let currentAuth: AuthState = {
   user: null,
@@ -74,6 +75,31 @@ async function persistAuth(): Promise<void> {
   }
 }
 
+async function loadLocalUsers(): Promise<Record<string, any>> {
+  try {
+    const info = await FileSystem.getInfoAsync(USERS_DB_FILE);
+    if (info.exists) {
+      const data = await FileSystem.readAsStringAsync(USERS_DB_FILE);
+      return JSON.parse(data) || {};
+    }
+  } catch {}
+  return {};
+}
+
+async function saveLocalUser(user: { email: string; fullName: string; phone: string; password?: string }): Promise<void> {
+  try {
+    const users = await loadLocalUsers();
+    users[user.email.toLowerCase()] = {
+      ...user,
+      email: user.email.toLowerCase(),
+      updatedAt: new Date().toISOString(),
+    };
+    await FileSystem.writeAsStringAsync(USERS_DB_FILE, JSON.stringify(users));
+  } catch (err) {
+    console.warn('[AuthService] Error saving local user:', err);
+  }
+}
+
 /**
  * Dispatch branded Sensoo verification OTP email via Resend API
  */
@@ -109,7 +135,7 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
       <h2 style="margin: 0 0 12px; font-size: 18px; color: #0F172A;">Verify Your Account</h2>
       <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5; color: #475569;">
         Hello <strong>${displayName}</strong>,<br>
-        Your 4-digit verification code is:
+        Use the 4-digit verification code below to complete sign-in:
       </p>
       <div style="background-color: #F0FDF4; border: 2px dashed #00875A; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 24px;">
         <span style="font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #00875A; font-family: monospace;">${otpCode}</span>
@@ -133,7 +159,7 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
       body: JSON.stringify({
         from: from,
         to: [toEmail.trim()],
-        subject: `Your Sensoo Verification Code is ${otpCode}`,
+        subject: 'Your Sensoo Verification Code',
         html,
       }),
     });
@@ -146,7 +172,6 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
 
 /**
  * Register a new user
- * Contacts backend or safely uses Resend directly if Render is updating
  */
 export async function registerUser(params: {
   fullName: string;
@@ -202,7 +227,15 @@ export async function registerUser(params: {
     console.warn('[AuthService] Backend register fetch error:', err);
   }
 
-  // If backend was 404 (Render deploying), send the email directly via Resend API
+  // Pre-save account credentials into local store for zero-downtime sign-in
+  await saveLocalUser({
+    email: cleanEmail,
+    fullName: cleanName,
+    phone: cleanPhone,
+    password: pass,
+  });
+
+  // If backend is 404 on Render, dispatch directly via Resend API
   if (!backendSuccess) {
     await sendResendEmailDirect(cleanEmail, localOtp, cleanName);
     currentAuth.pendingOtpCode = localOtp;
@@ -214,6 +247,7 @@ export async function registerUser(params: {
     fullName: cleanName,
     email: cleanEmail,
     phone: cleanPhone,
+    password: pass,
     isVerified: false,
     token: authToken,
     role: 'consumer',
@@ -254,7 +288,9 @@ export async function loginUser(params: {
     } catch {}
 
     if (!backendOtpSent) {
-      await sendResendEmailDirect(cleanEmail, localOtp, id);
+      const localUsers = await loadLocalUsers();
+      const userObj = localUsers[cleanEmail] || {};
+      await sendResendEmailDirect(cleanEmail, localOtp, userObj.fullName || id);
       currentAuth.pendingOtpCode = localOtp;
     }
 
@@ -293,31 +329,65 @@ export async function loginUser(params: {
       }),
     });
 
-    const data = await loginRes.json();
+    if (loginRes.ok) {
+      const data = await loginRes.json();
+      const account = data.account || {};
+      currentAuth.user = {
+        id: String(account.id || `USR-${Date.now().toString().slice(-6)}`),
+        fullName: account.full_name || 'Sensoo Member',
+        email: account.email || cleanEmail,
+        phone: account.phone || '',
+        isVerified: true,
+        token: data.access_token,
+        role: (account.role as any) || 'consumer',
+        lastLogin: new Date().toISOString(),
+      };
+      currentAuth.isAuthenticated = true;
+      currentAuth.pendingOtpCode = undefined;
+      currentAuth.pendingOtpDestination = undefined;
 
-    if (!loginRes.ok) {
+      await persistAuth();
+
+      return {
+        success: true,
+        requiresOtp: false,
+        message: 'Signed in successfully!',
+      };
+    } else if (loginRes.status !== 404) {
+      const data = await loginRes.json().catch(() => ({}));
       return {
         success: false,
         requiresOtp: false,
         message: data.detail || 'Incorrect email or password.',
       };
     }
+  } catch (err: any) {
+    console.warn('[AuthService] Backend login error:', err);
+  }
 
-    const account = data.account || {};
+  // Backend returned 404 (Render deploying): check persistent registered user store
+  const localUsers = await loadLocalUsers();
+  const existing = localUsers[cleanEmail];
+
+  if (existing) {
+    if (existing.password && existing.password !== params.password) {
+      return {
+        success: false,
+        requiresOtp: false,
+        message: 'Incorrect password. Please verify and try again.',
+      };
+    }
+
     currentAuth.user = {
-      id: String(account.id || `USR-${Date.now().toString().slice(-6)}`),
-      fullName: account.full_name || 'Sensoo Member',
-      email: account.email || cleanEmail,
-      phone: account.phone || '',
+      id: existing.id || `USR-${Date.now().toString().slice(-6)}`,
+      fullName: existing.fullName || 'Sensoo Member',
+      email: cleanEmail,
+      phone: existing.phone || '',
       isVerified: true,
-      token: data.access_token,
-      role: (account.role as any) || 'consumer',
+      role: 'consumer',
       lastLogin: new Date().toISOString(),
     };
     currentAuth.isAuthenticated = true;
-    currentAuth.pendingOtpCode = undefined;
-    currentAuth.pendingOtpDestination = undefined;
-
     await persistAuth();
 
     return {
@@ -325,13 +395,13 @@ export async function loginUser(params: {
       requiresOtp: false,
       message: 'Signed in successfully!',
     };
-  } catch (err: any) {
-    return {
-      success: false,
-      requiresOtp: false,
-      message: err.message || 'Network error during sign in.',
-    };
   }
+
+  return {
+    success: false,
+    requiresOtp: false,
+    message: 'Account not found. Please create an account first.',
+  };
 }
 
 /**
@@ -367,7 +437,7 @@ export async function verifyOtpCode(
     }
   } catch {}
 
-  // Fallback check against local OTP sent via Resend
+  // Check against OTP sent via Resend
   if (!isVerified && currentAuth.pendingOtpCode && enteredOtp.trim() === currentAuth.pendingOtpCode) {
     isVerified = true;
   }
@@ -394,8 +464,14 @@ export async function verifyOtpCode(
   currentAuth.isAuthenticated = true;
   currentAuth.pendingOtpCode = undefined;
   currentAuth.pendingOtpDestination = undefined;
-  currentAuth.pendingUser = undefined;
 
+  // Persist user account and active session
+  await saveLocalUser({
+    email,
+    fullName: newUser.fullName,
+    phone: newUser.phone,
+    password: pUser.password,
+  });
   await persistAuth();
 
   return {
@@ -430,7 +506,9 @@ export async function resendOtpCode(): Promise<{ success: boolean; message: stri
   } catch {}
 
   if (!backendSent) {
-    await sendResendEmailDirect(email, localOtp, pUser.fullName);
+    const localUsers = await loadLocalUsers();
+    const userObj = localUsers[email] || {};
+    await sendResendEmailDirect(email, localOtp, userObj.fullName || pUser.fullName);
     currentAuth.pendingOtpCode = localOtp;
   }
 
