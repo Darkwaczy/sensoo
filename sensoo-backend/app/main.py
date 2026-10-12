@@ -1,3 +1,19 @@
+import os
+import sys
+
+# Ensure local msflib extensions are always discovered first (e.g. on Render container builds)
+_local_msflib = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "msflib"))
+if os.path.exists(_local_msflib):
+    _parent_dir = os.path.dirname(_local_msflib)
+    if _parent_dir not in sys.path:
+        sys.path.insert(0, _parent_dir)
+    try:
+        import msflib
+        if _local_msflib not in msflib.__path__:
+            msflib.__path__.insert(0, _local_msflib)
+    except Exception:
+        pass
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
