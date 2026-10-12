@@ -30,6 +30,7 @@ export interface DeviceLinkInfo {
 
 const SCANS_FILE = `${FileSystem.documentDirectory || ''}sensoo_user_scans.json`;
 const DEVICE_FILE = `${FileSystem.documentDirectory || ''}sensoo_device_identity.json`;
+const RESET_FLAG_FILE = `${FileSystem.documentDirectory || ''}sensoo_reset_history_flag_v3.txt`;
 
 // In-memory cache to guarantee instantaneous synchronous returns
 let cachedDeviceId: string | null = null;
@@ -40,13 +41,22 @@ const scansListeners: Set<ScansListener> = new Set();
 
 export function subscribeToStoredScans(listener: ScansListener): () => void {
   scansListeners.add(listener);
-  if (cachedScans.length > 0) {
-    listener(cachedScans);
-  }
+  listener(cachedScans);
   return () => {
     scansListeners.delete(listener);
   };
 }
+
+// Automatically ensure history is cleared once on this release as requested
+(async () => {
+  try {
+    const flagInfo = await FileSystem.getInfoAsync(RESET_FLAG_FILE);
+    if (!flagInfo.exists) {
+      await clearStoredScans();
+      await FileSystem.writeAsStringAsync(RESET_FLAG_FILE, 'cleared');
+    }
+  } catch {}
+})();
 
 function notifyScansListeners(scans: StoredScanItem[]) {
   scansListeners.forEach((fn) => {

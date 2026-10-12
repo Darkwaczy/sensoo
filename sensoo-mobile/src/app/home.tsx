@@ -36,6 +36,7 @@ import {
 } from '../services/voiceAssistantService';
 import {
   getStoredScans,
+  clearStoredScans,
   subscribeToStoredScans,
   getDeviceLinkInfo,
   DeviceLinkInfo,
@@ -156,7 +157,11 @@ export default function HomeScreen() {
     React.useCallback(() => {
       let isMounted = true;
       getStoredScans().then((stored) => {
-        if (!isMounted || !stored || stored.length === 0) return;
+        if (!isMounted) return;
+        if (!stored || stored.length === 0) {
+          setRecentScans([]);
+          return;
+        }
         const mapped: RecentScanItem[] = stored.map((s, idx) => ({
           id: s.id || `stored-${idx}`,
           name: s.name,
@@ -168,10 +173,7 @@ export default function HomeScreen() {
           scenario: s.scenario,
           code: s.code,
         }));
-        setRecentScans((prev) => {
-          const storedCodes = new Set(mapped.map((m) => m.code));
-          return [...mapped, ...prev.filter((p) => !storedCodes.has(p.code))];
-        });
+        setRecentScans(mapped);
       });
 
       getDeviceLinkInfo().then((info) => {
@@ -187,7 +189,10 @@ export default function HomeScreen() {
   // Real-time reactive subscription ensuring local scans always show immediately
   useEffect(() => {
     const unsubscribe = subscribeToStoredScans((stored) => {
-      if (!stored || stored.length === 0) return;
+      if (!stored || stored.length === 0) {
+        setRecentScans([]);
+        return;
+      }
       const mapped: RecentScanItem[] = stored.map((s, idx) => ({
         id: s.id || `stored-${idx}`,
         name: s.name,
@@ -199,10 +204,7 @@ export default function HomeScreen() {
         scenario: s.scenario,
         code: s.code,
       }));
-      setRecentScans((prev) => {
-        const storedCodes = new Set(mapped.map((m) => m.code));
-        return [...mapped, ...prev.filter((p) => !storedCodes.has(p.code))];
-      });
+      setRecentScans(mapped);
     });
     return unsubscribe;
   }, []);
@@ -837,9 +839,23 @@ export default function HomeScreen() {
             {/* Recent Scans Section Header */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Recent Scans</Text>
-              <TouchableOpacity activeOpacity={0.7} onPress={() => setActiveView('RecentScans')}>
-                <Text style={styles.seeAllText}>See all ›</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {recentScans.length > 0 && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={async () => {
+                      await clearStoredScans();
+                      setRecentScans([]);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ fontSize: 13, color: '#EF4444', fontWeight: '700' }}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity activeOpacity={0.7} onPress={() => setActiveView('RecentScans')}>
+                  <Text style={styles.seeAllText}>See all ›</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Recent Scans Preview Items */}
@@ -901,9 +917,30 @@ export default function HomeScreen() {
                 <Text style={styles.backArrowGlyph}>←</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.subHeaderTitleBlock}>
-              <Text style={styles.subPageTitle}>Recent Scans</Text>
-              <Text style={styles.subPageSubtitle}>View all the products you've scanned.</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 16 }}>
+              <View style={styles.subHeaderTitleBlock}>
+                <Text style={styles.subPageTitle}>Recent Scans</Text>
+                <Text style={styles.subPageSubtitle}>View all the products you've scanned.</Text>
+              </View>
+              {recentScans.length > 0 && (
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    backgroundColor: '#FEE2E2',
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#FCA5A5',
+                  }}
+                  activeOpacity={0.7}
+                  onPress={async () => {
+                    await clearStoredScans();
+                    setRecentScans([]);
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>🗑️ Clear All</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Search Bar */}

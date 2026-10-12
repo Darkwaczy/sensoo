@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getCurrentUserLocation } from '../services/clinicService';
 import { fetchLiveFeed } from '../services/sensooApiService';
+import { clearStoredScans } from '../services/sensooStorageService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -98,7 +99,16 @@ export default function ScanHistoryScreen() {
             <Text style={styles.backChevronText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Scan History</Text>
-          <View style={{ width: 36 }} />
+          <TouchableOpacity
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={async () => {
+              await clearStoredScans();
+              router.back();
+            }}
+          >
+            <Text style={{ fontSize: 13, color: '#EF4444', fontWeight: '700' }}>Clear</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
