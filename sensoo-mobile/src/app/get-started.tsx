@@ -18,6 +18,14 @@ export default function GetStartedScreen() {
   const router = useRouter();
 
   const handleGetStarted = () => {
+    router.push('/signup' as any);
+  };
+
+  const handleSignIn = () => {
+    router.push('/signin' as any);
+  };
+
+  const handleContinueAsGuest = () => {
     router.replace('/home' as any);
   };
 
@@ -33,6 +41,13 @@ export default function GetStartedScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
+          <TouchableOpacity
+            style={styles.guestPill}
+            activeOpacity={0.7}
+            onPress={handleContinueAsGuest}
+          >
+            <Text style={styles.guestText}>Guest</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
 
@@ -63,6 +78,14 @@ export default function GetStartedScreen() {
           <Text style={styles.getStartedText}>Get Started</Text>
           <Text style={styles.getStartedArrow}>→</Text>
         </TouchableOpacity>
+
+        {/* Secondary Link: Sign In */}
+        <View style={styles.authLinksRow}>
+          <Text style={styles.authPromptText}>Already have an account? </Text>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleSignIn}>
+            <Text style={styles.authSignInText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -166,5 +189,36 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     marginLeft: 12,
+  },
+
+  guestPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  guestText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  authLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+  authPromptText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  authSignInText: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '800',
   },
 });

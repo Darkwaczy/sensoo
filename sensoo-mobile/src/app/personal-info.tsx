@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { subscribeAuth, updateProfile } from '../services/authService';
 
 export default function PersonalInformationScreen() {
   const router = useRouter();
@@ -21,6 +22,17 @@ export default function PersonalInformationScreen() {
   const [fullName, setFullName] = useState('Ings');
   const [email, setEmail] = useState('ings@example.com');
   const [phone, setPhone] = useState('+234 801 234 5678');
+
+  useEffect(() => {
+    const unsub = subscribeAuth((state) => {
+      if (state.user) {
+        if (state.user.fullName) setFullName(state.user.fullName);
+        if (state.user.email) setEmail(state.user.email);
+        if (state.user.phone) setPhone(state.user.phone);
+      }
+    });
+    return unsub;
+  }, []);
 
   // Edit sub-modal states
   const [activeModal, setActiveModal] = useState<
@@ -55,18 +67,24 @@ export default function PersonalInformationScreen() {
     setActiveModal('PHONE');
   };
 
-  const handleSaveName = () => {
-    setFullName(tempName.trim() || 'Ings');
+  const handleSaveName = async () => {
+    const val = tempName.trim() || 'Ings';
+    setFullName(val);
+    await updateProfile({ fullName: val }).catch(() => {});
     setActiveModal('NONE');
   };
 
-  const handleSaveEmail = () => {
-    setEmail(tempEmail.trim() || 'ings@example.com');
+  const handleSaveEmail = async () => {
+    const val = tempEmail.trim() || 'ings@example.com';
+    setEmail(val);
+    await updateProfile({ email: val }).catch(() => {});
     setActiveModal('NONE');
   };
 
-  const handleSavePhone = () => {
-    setPhone(tempPhone.trim() || '+234 801 234 5678');
+  const handleSavePhone = async () => {
+    const val = tempPhone.trim() || '+234 801 234 5678';
+    setPhone(val);
+    await updateProfile({ phone: val }).catch(() => {});
     setActiveModal('NONE');
   };
 

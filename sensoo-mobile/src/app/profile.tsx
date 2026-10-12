@@ -19,15 +19,24 @@ import {
   VoiceAssistantSettings,
 } from '../services/voiceAssistantService';
 import { getCurrentUserLocation } from '../services/clinicService';
+import { subscribeAuth, logoutUser, UserProfile } from '../services/authService';
 
 export default function ProfileScreen() {
   const router = useRouter();
 
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [voiceSettings, setVoiceSettings] = useState<VoiceAssistantSettings>(getVoiceAssistantSettings());
   const [showPersonalInfoModal, setShowPersonalInfoModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [userCity, setUserCity] = useState('Current Location');
+
+  useEffect(() => {
+    const unsub = subscribeAuth((state) => {
+      setCurrentUser(state.user);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     getCurrentUserLocation().then((loc) => {
@@ -51,7 +60,10 @@ export default function ProfileScreen() {
         {
           text: 'Log out',
           style: 'destructive',
-          onPress: () => router.replace('/get-started' as any),
+          onPress: async () => {
+            await logoutUser();
+            router.replace('/signin' as any);
+          },
         },
       ]
     );
@@ -85,10 +97,14 @@ export default function ProfileScreen() {
         {/* User Identity Header */}
         <View style={styles.profileHeaderBlock}>
           <View style={styles.avatarLarge}>
-            <Text style={styles.avatarTextLarge}>H</Text>
+            <Text style={styles.avatarTextLarge}>
+              {(currentUser?.fullName || 'Ings').charAt(0).toUpperCase()}
+            </Text>
           </View>
-          <Text style={styles.profileName}>Ings</Text>
-          <Text style={styles.profileRole}>Account holder</Text>
+          <Text style={styles.profileName}>{currentUser?.fullName || 'Ings'}</Text>
+          <Text style={styles.profileRole}>
+            {currentUser?.email || 'Account holder'}
+          </Text>
         </View>
 
         {/* Menu Items List */}

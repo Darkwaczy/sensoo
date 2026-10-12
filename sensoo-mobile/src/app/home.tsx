@@ -41,6 +41,7 @@ import {
   getDeviceLinkInfo,
   DeviceLinkInfo,
 } from '../services/sensooStorageService';
+import { subscribeAuth, UserProfile } from '../services/authService';
 import {
   queryNafdacGreenbook,
   fetchLiveNafdacGreenbook,
@@ -151,6 +152,14 @@ export default function HomeScreen() {
   const [greenbookStatusFilter, setGreenbookStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [selectedGreenbookProduct, setSelectedGreenbookProduct] = useState<NafdacGreenbookProduct | null>(null);
   const [deviceInfo, setDeviceInfo] = useState<DeviceLinkInfo | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeAuth((state) => {
+      setCurrentUser(state.user);
+    });
+    return unsub;
+  }, []);
 
   // Synchronize local saved scans and linked device identity whenever user views Home
   useFocusEffect(
@@ -748,7 +757,9 @@ export default function HomeScreen() {
                     setActiveView('Profile');
                   }}
                 >
-                  <Text style={styles.avatarText}>I</Text>
+                  <Text style={styles.avatarText}>
+                    {(currentUser?.fullName || 'Ings').charAt(0).toUpperCase()}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -759,7 +770,9 @@ export default function HomeScreen() {
             <View style={styles.greetingSection}>
               <Text style={styles.greetingTitle}>
                 <Text style={styles.greetingBlack}>Good morning, </Text>
-                <Text style={styles.greetingGreen}>Ings</Text>
+                <Text style={styles.greetingGreen}>
+                  {currentUser?.fullName ? currentUser.fullName.split(' ')[0] : 'Ings'}
+                </Text>
               </Text>
               <Text style={styles.greetingSubtitle}>Verify a product before you buy or use it.</Text>
             </View>
