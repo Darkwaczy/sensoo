@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./sensoo.db"
     SECRET_KEY: str = "sensoo-msflib-production-secret-auth-key-2026"
     AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "Sensoo Security <verify@inboxsync.co.uk>"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

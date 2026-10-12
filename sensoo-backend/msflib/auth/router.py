@@ -88,6 +88,27 @@ def router(
         session.commit()
         session.refresh(account)
 
+        # Store initial OTP for email verification
+        reg_otp = f"{random.randint(1000, 9999)}"
+        keystore = getattr(request.app.state, "keystore", None)
+        try:
+            from app.main import get_keystore
+            ks = get_keystore()
+            if ks and hasattr(ks, "set"):
+                ks.set(f"otp:{account.email}", reg_otp)
+        except Exception:
+            pass
+
+        try:
+            from app.email_service import send_otp_via_resend
+            await send_otp_via_resend(
+                to_email=account.email,
+                otp_code=reg_otp,
+                user_name=account.full_name,
+            )
+        except Exception:
+            pass
+
         # Issue access token
         secret_key = get_secret_key()
         expire_minutes = get_expire_minutes()
@@ -213,10 +234,20 @@ def router(
         account = session.exec(
             select(account_type).where(account_type.email == req.email.strip())
         ).first()
-        # Even if account doesn't exist, generate demo code to avoid user enumeration timing attacks
         otp_code = f"{random.randint(1000, 9999)}"
         if keystore is not None and hasattr(keystore, "set"):
             keystore.set(f"otp:{req.email.strip()}", otp_code)
+
+        # Dispatch branded Sensoo verification OTP email via Resend
+        try:
+            from app.email_service import send_otp_via_resend
+            await send_otp_via_resend(
+                to_email=req.email.strip(),
+                otp_code=otp_code,
+                user_name=getattr(account, "full_name", None) if account else None,
+            )
+        except Exception:
+            pass
 
         return {
             "ok": True,
