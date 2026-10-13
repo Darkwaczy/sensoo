@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "Sensoo Security <verify@inboxsync.co.uk>"
+    CARTESIA_API_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

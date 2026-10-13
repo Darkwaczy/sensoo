@@ -34,6 +34,7 @@ import {
   VoiceAssistantSettings,
   transcribeAudioWithGroq,
 } from '../services/voiceAssistantService';
+import { speakWithCartesia, stopCartesiaSpeech } from '../services/cartesiaTtsService';
 import {
   getStoredScans,
   clearStoredScans,
@@ -544,7 +545,16 @@ export default function HomeScreen() {
     const parsed = parseVoiceCommand(cmd);
     console.log('[VoiceAssistant] Parsed Intent:', parsed.intent, 'for text:', cmd);
 
-    if (parsed.intent === 'SCAN') {
+    if (parsed.intent === 'GREETING') {
+      const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
+      const greetingText = `Hello, ${userName}. What product are we scanning today?`;
+      setVoiceNotice(greetingText);
+      speakWithCartesia(greetingText);
+      setTimeout(() => {
+        setVoiceNotice((prev) => (prev === greetingText ? null : prev));
+      }, 7000);
+      return;
+    } else if (parsed.intent === 'SCAN') {
       router.push('/scanner');
     } else if (parsed.intent === 'CLINIC') {
       router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } });
@@ -2270,6 +2280,15 @@ export default function HomeScreen() {
       {/* ======================================================== */}
       {voiceSettings.enabled && (
         <View style={styles.floatingVoiceContainer} pointerEvents="box-none">
+          {voiceNotice && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.voiceQuickPill}
+              onPress={() => setVoiceNotice(null)}
+            >
+              <Text style={styles.voiceQuickPillText}>💬 {voiceNotice}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[
               styles.heartPumpFloatingBtn,

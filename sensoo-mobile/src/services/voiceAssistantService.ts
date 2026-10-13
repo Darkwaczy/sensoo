@@ -11,6 +11,7 @@ export interface VoiceAssistantSettings {
 }
 
 export type VoiceCommandIntent =
+  | 'GREETING'
   | 'SCAN'
   | 'CLINIC'
   | 'REPORT'
@@ -103,26 +104,40 @@ export const resetVoiceprint = (): void => {
  * Parses user speech for the "Hey Sensoo" wake-word and classifies intent.
  */
 export const parseVoiceCommand = (transcript: string): ParsedVoiceCommand => {
-  const text = transcript.trim().toLowerCase();
+  // Normalize punctuation and extra spaces so "Hey! Sensoo" or "Hey, Sensoo" matches cleanly
+  const normalized = transcript
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   const hasWakeWord =
-    text.includes('hey sensoo') ||
-    text.includes('hay sensoo') ||
-    text.includes('hey censu') ||
-    text.includes('hey sensor') ||
-    text.includes('sensoo');
+    normalized.includes('hey sensoo') ||
+    normalized.includes('hay sensoo') ||
+    normalized.includes('hey censu') ||
+    normalized.includes('hey sensor') ||
+    normalized.includes('sensoo');
 
   // Strip wake phrase for intent classification
-  const cleanCmd = text
+  const cleanCmd = normalized
     .replace(/hey\s+sensoo/gi, '')
     .replace(/hay\s+sensoo/gi, '')
+    .replace(/hey\s+censu/gi, '')
+    .replace(/hey\s+sensor/gi, '')
     .replace(/sensoo/gi, '')
     .trim();
 
   let intent: VoiceCommandIntent = 'UNKNOWN';
   let actionSummary = 'Command not recognized';
 
+  // 0. Greeting / Wake Word check (e.g. "Hey! Sensoo", "Hello Sensoo", "Hi Sensoo", or wake word alone)
+  const greetingWords = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'how are you', 'sup', 'yo', ''];
+  if (hasWakeWord && greetingWords.includes(cleanCmd)) {
+    intent = 'GREETING';
+    actionSummary = 'Greeting: "Hello! What product are we scanning today?"';
+  }
   // 1. Comprehensive SCANNING intent keywords
-  if (
+  else if (
     cleanCmd.includes('scan') ||
     cleanCmd.includes('camera') ||
     cleanCmd.includes('barcode') ||

@@ -7,7 +7,8 @@ Provides HTTP transport endpoints complying with msflib-ai-api specs:
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
+from app.settings import settings
 from pydantic import BaseModel, Field
 
 ai_router = APIRouter(prefix="/ai", tags=["MSFLib AI Module"])
@@ -42,6 +43,12 @@ class SearchResponse(BaseModel):
     hits: List[SearchHit]
 
 
+class TtsRequest(BaseModel):
+    text: str = Field(..., description="Text to synthesize with Cartesia")
+    voice_id: Optional[str] = Field("9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", description="Cartesia Voice ID")
+    model_id: Optional[str] = Field("sonic-2", description="Cartesia Model ID")
+
+
 @ai_router.get("/status")
 def get_ai_status() -> Dict[str, Any]:
     """Report MSFLib AI module status."""
@@ -50,9 +57,58 @@ def get_ai_status() -> Dict[str, Any]:
         "version": "0.2.1",
         "configured_provider": "google-gemini",
         "model": "gemini-3.8-flash",
+        "tts_provider": "cartesia-sonic-2",
+        "tts_configured": bool(settings.CARTESIA_API_KEY),
         "status": "active",
         "vector_backend": "sqlite-vss / age-graph",
     }
+
+
+@ai_router.post("/tts")
+def synthesize_speech(body: TtsRequest):
+    """Synthesize speech using Cartesia Sonic API without hardcoded keys."""
+    import httpx
+
+    api_key = settings.CARTESIA_API_KEY
+    if not api_key:
+        raise HTTPException(status_code=500, detail="CARTESIA_API_KEY is not configured in backend environment")
+
+    clean_text = body.text.strip()
+    if not clean_text:
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(
+                "https://api.cartesia.ai/tts/bytes",
+                headers={
+                    "X-API-Key": api_key,
+                    "Cartesia-Version": "2024-06-10",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "transcript": clean_text,
+                    "model_id": body.model_id or "sonic-2",
+                    "voice": {
+                        "mode": "id",
+                        "id": body.voice_id or "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+                    },
+                    "output_format": {
+                        "container": "mp3",
+                        "bit_rate": 128000,
+                        "sample_rate": 44100,
+                    },
+                },
+            )
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=f"Cartesia error: {resp.text}")
+
+        return Response(content=resp.content, media_type="audio/mpeg")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to communicate with Cartesia: {str(exc)}")
 
 
 @ai_router.post("/ask", response_model=AskResponse)

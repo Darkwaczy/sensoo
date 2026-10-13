@@ -17,6 +17,7 @@ import {
   updateVoiceAssistantSettings,
   VoiceAssistantSettings,
 } from '../services/voiceAssistantService';
+import { speakWithCartesia } from '../services/cartesiaTtsService';
 
 export default function VoiceAssistantScreen() {
   const router = useRouter();
@@ -209,6 +210,23 @@ export default function VoiceAssistantScreen() {
           </Text>
 
           <View style={styles.testButtonsGrid}>
+            <TouchableOpacity
+              style={[styles.testBtn, { borderColor: '#10B981', backgroundColor: '#ECFDF5' }]}
+              activeOpacity={0.8}
+              onPress={() =>
+                runTestCommand('Hey! Sensoo Greeting', () => {
+                  speakWithCartesia('Hello, User. What product are we scanning today?');
+                })
+              }
+            >
+              <Text style={styles.testBtnIcon}>🎙️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.testBtnTitle, { color: '#065F46' }]}>"Hey! Sensoo" Wake Word</Text>
+                <Text style={styles.testBtnSub}>Cartesia TTS Voice Greeting</Text>
+              </View>
+              <Text style={[styles.testBtnChevron, { color: '#059669' }]}>▶</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.testBtn}
               activeOpacity={0.8}
