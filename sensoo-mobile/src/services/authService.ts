@@ -658,13 +658,8 @@ export async function verifyOtpCode(
     }
   } catch {}
 
-  // Check against OTP sent via Resend or testing bypass codes
-  if (
-    !isVerified &&
-    ((currentAuth.pendingOtpCode && enteredOtp.trim() === currentAuth.pendingOtpCode) ||
-      enteredOtp.trim() === '123456' ||
-      enteredOtp.trim() === '000000')
-  ) {
+  // Check against OTP sent via Resend
+  if (!isVerified && currentAuth.pendingOtpCode && enteredOtp.trim() === currentAuth.pendingOtpCode) {
     isVerified = true;
   }
 

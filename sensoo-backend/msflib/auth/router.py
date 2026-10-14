@@ -265,7 +265,7 @@ def router(
         code = req.token.strip()
 
         saved_code = keystore.get(f"otp:{email}") if (keystore and hasattr(keystore, "get")) else None
-        if (saved_code and str(saved_code) == code) or code in ["123456", "000000"]:
+        if saved_code and str(saved_code) == code:
             return {"valid": True, "email": email, "token": code}
 
         raise HTTPException(
