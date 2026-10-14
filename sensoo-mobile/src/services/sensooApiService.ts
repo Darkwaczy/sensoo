@@ -293,13 +293,6 @@ function decodeSecret(b64: string): string {
   }
 }
 
-function getGeminiApiKey(): string {
-  return (
-    process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
-    decodeSecret('QVEuQWI4Uk42SjFwVWwxcTh0aVE3cjBNWlc1M1BzYkRQMmhHeWJxaUhOTHIwTTk4SHdEQmc=')
-  );
-}
-
 function getGroqApiKey(): string {
   return (
     process.env.EXPO_PUBLIC_GROQ_API_KEY ||
@@ -309,7 +302,6 @@ function getGroqApiKey(): string {
 
 /**
  * Direct client-side lookup via Universal Real-Time GTIN Web Search & GS1 verification.
- * Calls Sensoo Backend read-only /api/v1/lookup with Groq LLaMA 3.3 fallback.
  * 100% READ-ONLY: Never writes or registers anything to the database without explicit user request.
  */
 export async function lookupLiveGtinWeb(
@@ -317,60 +309,6 @@ export async function lookupLiveGtinWeb(
 ): Promise<{ productName: string; brand: string; batch: string; category?: string; status?: string; origin?: string } | null> {
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
-
-  // 1. Direct High-Speed Gemini AI Real-Time GTIN Identification (covers Lucozade, Dangote, Cadbury, Nivea, etc.)
-  const geminiKey = getGeminiApiKey();
-  if (geminiKey) {
-    try {
-      const geminiCtrl = new AbortController();
-      const geminiTimeout = setTimeout(() => geminiCtrl.abort(), 6000);
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `You are an exact product barcode database. Barcode to verify: "${digits}". CRITICAL: Only return found: true if you know with 100% certainty the exact verified commercial brand and product name for this specific barcode. NEVER guess, invent, or approximate product or medicine names. If you are not completely certain, return strictly JSON: {"found": false}. If 100% certain: {"found": true, "product_name": "...", "brand": "...", "category": "..."}.`,
-                  },
-                ],
-              },
-            ],
-          }),
-          signal: geminiCtrl.signal,
-        }
-      );
-      clearTimeout(geminiTimeout);
-
-      if (geminiRes.ok) {
-        const geminiData = await geminiRes.json();
-        const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        let cleanJson = rawText.trim();
-        if (cleanJson.includes('```json')) {
-          cleanJson = cleanJson.split('```json')[1].split('```')[0].trim();
-        } else if (cleanJson.includes('```')) {
-          cleanJson = cleanJson.split('```')[1].split('```')[0].trim();
-        }
-        try {
-          const parsed = JSON.parse(cleanJson);
-          if (parsed.found && parsed.product_name && !parsed.product_name.toLowerCase().includes('unknown')) {
-            return {
-              productName: parsed.product_name,
-              brand: parsed.brand || 'Verified Brand',
-              batch: `GTIN-${digits}`,
-              category: parsed.category || 'Consumer Retail Goods',
-              status: 'AUTHENTIC',
-            };
-          }
-        } catch {}
-      }
-    } catch {
-      // Continue to DuckDuckGo and Groq
-    }
-  }
 
   // 2. Direct High-Speed Exact Web Search Resolver (Checks ALL result links)
   try {
