@@ -248,6 +248,7 @@ async def send_otp_via_resend(
                 headers={
                     "Authorization": f"Bearer {key}",
                     "Content-Type": "application/json",
+                    "User-Agent": "Sensoo-App/1.0",
                 },
                 json=payload,
             )

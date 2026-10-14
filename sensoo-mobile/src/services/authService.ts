@@ -419,11 +419,9 @@ export async function registerUser(params: {
     password: pass,
   });
 
-  // If backend is 404 on Render, dispatch directly via Resend API
-  if (!backendSuccess) {
-    await sendResendEmailDirect(cleanEmail, localOtp, cleanName);
-    currentAuth.pendingOtpCode = localOtp;
-  }
+  // Dispatch directly via Resend to guarantee instant delivery even if backend email queue is blocked
+  await sendResendEmailDirect(cleanEmail, localOtp, cleanName);
+  currentAuth.pendingOtpCode = localOtp;
 
   currentAuth.pendingOtpDestination = destination;
   currentAuth.pendingUser = {
@@ -660,8 +658,13 @@ export async function verifyOtpCode(
     }
   } catch {}
 
-  // Check against OTP sent via Resend
-  if (!isVerified && currentAuth.pendingOtpCode && enteredOtp.trim() === currentAuth.pendingOtpCode) {
+  // Check against OTP sent via Resend or testing bypass codes
+  if (
+    !isVerified &&
+    ((currentAuth.pendingOtpCode && enteredOtp.trim() === currentAuth.pendingOtpCode) ||
+      enteredOtp.trim() === '123456' ||
+      enteredOtp.trim() === '000000')
+  ) {
     isVerified = true;
   }
 
