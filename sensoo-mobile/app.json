@@ -1,17 +1,20 @@
 {
   "expo": {
     "name": "Sensoo",
-    "slug": "sensoo-mobile",
+    "slug": "sensoo",
     "owner": "ingstech",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "sensoomobile",
+    "scheme": "sensoo",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.ingstech.sensoo",
+      "name": "Sensoo",
       "icon": "./assets/images/icon.png"
     },
     "android": {
+      "package": "com.ingstech.sensoo",
       "adaptiveIcon": {
         "backgroundColor": "#032B20",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +22,6 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.sensoomobile",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",

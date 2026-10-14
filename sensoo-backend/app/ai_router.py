@@ -6,6 +6,7 @@ Provides HTTP transport endpoints complying with msflib-ai-api specs:
 - GET  /api/v1/ai/status : AI Engine Module Status
 """
 
+import re
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Response
 from app.settings import settings
@@ -122,19 +123,42 @@ def ask_ai_assistant(body: AskRequest) -> AskResponse:
     prod = body.product_name or "Product"
     status = body.status or "UNKNOWN"
 
-    # Query online EMDEX & Barcode APIs in real time
-    online_info = None
-    try:
-        search_target = prod if prod != "Product" else (code if code != "N/A" else q)
-        online_info = asyncio.run(fetch_online_product_data(search_target))
-        if not online_info and len(q) > 2:
-            online_info = asyncio.run(search_emdex_drug(q))
-    except Exception:
-        online_info = None
-
     source_docs = [
         {"source_id": "nafdac-mas-guidelines-2024", "title": "NAFDAC Anti-Counterfeit Regulatory Standard"},
     ]
+
+    # 1. Handle common conversational greetings and check-ins naturally
+    greetings = {"hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you", "who are you"}
+    clean_q = re.sub(r"[^\w\s]", "", q).strip()
+    if clean_q in greetings or clean_q.startswith(("hi ", "hello ", "hey ")):
+        return AskResponse(
+            answer=(
+                "Hello! I am Sensoo AI, your product safety and anti-counterfeit assistant. "
+                "How can I help you today? You can scan a product barcode, verify medication authenticity, "
+                "or report a suspicious seller."
+            ),
+            source_documents=source_docs,
+        )
+
+    # Query online EMDEX & Barcode APIs in real time only if not a generic greeting
+    online_info = None
+    try:
+        # Don't treat generic short queries as drug search targets unless length > 2 and not a greeting
+        if prod != "Product":
+            search_target = prod
+        elif code != "N/A":
+            search_target = code
+        elif len(q) > 3 and clean_q not in greetings:
+            search_target = q
+        else:
+            search_target = None
+
+        if search_target:
+            online_info = asyncio.run(fetch_online_product_data(search_target))
+            if not online_info and len(search_target) > 3:
+                online_info = asyncio.run(search_emdex_drug(search_target))
+    except Exception:
+        online_info = None
 
     if online_info:
         source_docs.append({
