@@ -1,17 +1,17 @@
 import { Platform } from 'react-native';
 import * as Speech from 'expo-speech';
 
-// Strictly loaded from environment variables (Never hardcoded)
 const CARTESIA_API_KEY = process.env.EXPO_PUBLIC_CARTESIA_API_KEY || '';
-const BACKEND_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const BACKEND_API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://sensoo-app-final-2.onrender.com/api/v1';
 
 export const CARTESIA_VOICES = {
   JACQUELINE_REASSURING: '9626c31c-bec5-4cca-baa8-f8ba9e84c8bc', // Calm, reassuring medical/safety female voice
   YASMIN_DIALOGUE: '9zDWKPmuRaJcTg4z4YRNEM',
-  RAY_CONVERSATIONAL: '565510e8-6b45-45de-8758-13588fbaec73', // Approachable, natural male voice
+  RAY_CONVERSATIONAL: '565510e8-6b45-45de-8758-13588fbaec73', // Natural human male voice
 };
 
-export const DEFAULT_CARTESIA_VOICE = CARTESIA_VOICES.JACQUELINE_REASSURING;
+// Default to the natural male conversational voice
+export const DEFAULT_CARTESIA_VOICE = CARTESIA_VOICES.RAY_CONVERSATIONAL;
 export const CARTESIA_MODEL = 'sonic-2';
 
 // In-memory player references
@@ -125,29 +125,8 @@ export async function speakWithCartesia(
   try {
     let audioBytes: ArrayBuffer | null = null;
 
-    // 1. Primary Route: Sensoo MSFLib FastAPI Backend (/api/v1/ai/tts)
-    try {
-      const backendResp = await fetch(`${BACKEND_API_URL}/ai/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: clean,
-          voice_id: voiceId,
-          model_id: modelId,
-        }),
-      });
-
-      if (backendResp.ok) {
-        audioBytes = await backendResp.arrayBuffer();
-      }
-    } catch (backendErr) {
-      console.warn('[Cartesia] MSFLib backend route failed, attempting direct fallback:', backendErr);
-    }
-
-    // 2. Secondary Fallback: Direct Cartesia REST API if client key is configured in .env
-    if (!audioBytes && isCartesiaConfigured()) {
+    // 1. Direct Cartesia Sonic REST API (fastest & most reliable on device)
+    if (isCartesiaConfigured()) {
       try {
         const resp = await fetch('https://api.cartesia.ai/tts/bytes', {
           method: 'POST',
@@ -178,11 +157,34 @@ export async function speakWithCartesia(
           console.warn('[Cartesia] Direct API error:', resp.status, errText);
         }
       } catch (directErr) {
-        console.warn('[Cartesia] Direct fetch failed:', directErr);
+        console.warn('[Cartesia] Direct fetch failed, attempting backend proxy:', directErr);
       }
     }
 
-    // 3. If audio was successfully synthesized, play it!
+    // 2. Secondary: Sensoo Backend (/api/v1/ai/tts) if available
+    if (!audioBytes) {
+      try {
+        const backendResp = await fetch(`${BACKEND_API_URL}/ai/tts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: clean,
+            voice_id: voiceId,
+            model_id: modelId,
+          }),
+        });
+
+        if (backendResp.ok) {
+          audioBytes = await backendResp.arrayBuffer();
+        }
+      } catch (backendErr) {
+        console.warn('[Cartesia] Backend proxy route failed:', backendErr);
+      }
+    }
+
+    // 3. Play audio if synthesized
     if (audioBytes && audioBytes.byteLength > 0) {
       options?.onStart?.();
 
@@ -193,27 +195,13 @@ export async function speakWithCartesia(
       }
     }
 
-    // 4. Graceful Fallback to device expo-speech if Cartesia is unreachable
-    console.info('[Cartesia] Falling back to Expo device Speech.');
-    options?.onStart?.();
-    Speech.speak(clean, {
-      language: 'en',
-      rate: 0.95,
-      pitch: 1.0,
-      onDone: options?.onDone,
-      onError: options?.onError,
-    });
-    return true;
+    // Never fall back to robotic device Speech.speak
+    console.warn('[Cartesia] Audio synthesis returned no bytes; remaining silent.');
+    options?.onError?.(new Error('Cartesia audio synthesis unavailable'));
+    return false;
   } catch (error) {
     console.error('[Cartesia] Synthesis failed:', error);
     options?.onError?.(error);
-    // Final fallback
-    Speech.speak(clean, {
-      language: 'en',
-      rate: 0.95,
-      pitch: 1.0,
-      onDone: options?.onDone,
-    });
     return false;
   }
 }

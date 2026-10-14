@@ -508,27 +508,32 @@ export default function HomeScreen() {
           if (transcript && transcript.trim().length > 0) {
             handleVoiceCommand(transcript.trim());
           } else {
-            // No speech detected, default to friendly greeting
-            handleVoiceCommand('Hey Sensoo');
+            // User did not say anything or stayed silent
+            setVoiceNotice('No speech detected');
+            setTimeout(() => {
+              setVoiceNotice((prev) => (prev === 'No speech detected' ? null : prev));
+            }, 2000);
           }
         } catch (err) {
           console.warn('[VoiceAssistant] Groq Whisper transcription error:', err);
-          // If network / API error, still acknowledge the user warmly
-          handleVoiceCommand('Hey Sensoo');
+          setVoiceNotice('Could not process audio');
+          setTimeout(() => {
+            setVoiceNotice((prev) => (prev === 'Could not process audio' ? null : prev));
+          }, 2000);
         } finally {
           isTranscribingRef.current = false;
         }
       } else {
-        handleVoiceCommand('Hey Sensoo');
+        setVoiceNotice(null);
       }
     } catch (err) {
       console.warn('[VoiceAssistant] Error stopping recording:', err);
-      handleVoiceCommand('Hey Sensoo');
+      setVoiceNotice(null);
     }
   };
 
   const toggleVoiceAssistant = async () => {
-    // If already recording and tapped again, stop immediately early
+    // If already recording and tapped again, stop immediately and process
     if (isVoiceListening) {
       await stopAndExecuteVoice();
       return;
@@ -546,16 +551,16 @@ export default function HomeScreen() {
       });
 
       console.log('[VoiceAssistant] Listening to voice...');
-      setVoiceNotice('Listening... Say "Hey Sensoo"');
+      setVoiceNotice('Listening... Tap again when done');
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsVoiceListening(true);
 
-      // Single Tap Experience: listens for 4s command window then auto-executes seamlessly
+      // Auto-stop after 5s if user hasn't manually tapped again
       if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = setTimeout(() => {
         stopAndExecuteVoice();
-      }, 4000);
+      }, 5000);
     } catch (err) {
       console.warn('[VoiceAssistant] Error starting voice recording:', err);
       setIsVoiceListening(false);
@@ -565,42 +570,53 @@ export default function HomeScreen() {
 
   const handleVoiceCommand = (cmd: string) => {
     setIsVoiceListening(false);
-    try {
-      Speech.stop();
-    } catch {}
+    stopCartesiaSpeech();
 
     const parsed = parseVoiceCommand(cmd);
     console.log('[VoiceAssistant] Parsed Intent:', parsed.intent, 'for text:', cmd);
 
     const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
+    const shouldSpeak = Boolean(voiceSettings.voiceReplyEnabled);
 
     if (parsed.intent === 'GREETING') {
       const greetingText = `Hello, ${userName}. What product are we scanning today?`;
       setVoiceNotice(greetingText);
-      speakWithCartesia(greetingText);
+      if (shouldSpeak) {
+        speakWithCartesia(greetingText);
+      }
       setTimeout(() => {
         setVoiceNotice((prev) => (prev === greetingText ? null : prev));
-      }, 7000);
+      }, 5000);
       return;
     } else if (parsed.intent === 'SCAN') {
       setVoiceNotice('Opening scanner...');
-      speakWithCartesia('Opening scanner');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening scanner');
+      }
       router.push('/scanner');
     } else if (parsed.intent === 'CLINIC') {
       setVoiceNotice('Finding nearby clinics...');
-      speakWithCartesia('Finding nearby clinics');
+      if (shouldSpeak) {
+        speakWithCartesia('Finding nearby clinics');
+      }
       router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } });
     } else if (parsed.intent === 'REPORT') {
       setVoiceNotice('Opening report center...');
-      speakWithCartesia('Opening safety report');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening safety report');
+      }
       router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } });
     } else if (parsed.intent === 'HISTORY') {
       setVoiceNotice('Opening scan history...');
-      speakWithCartesia('Opening recent scan history');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening recent scan history');
+      }
       setActiveView('RecentScans');
     } else if (parsed.intent === 'ALERTS') {
       setVoiceNotice('Opening safety alerts...');
-      speakWithCartesia('Opening drug and safety alerts');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening drug and safety alerts');
+      }
       setActiveView('Alerts');
     } else if (parsed.intent === 'PROFILE') {
       setActiveView('Profile');
@@ -618,12 +634,14 @@ export default function HomeScreen() {
     } else if (parsed.intent === 'GUIDANCE') {
       router.push({ pathname: '/agent', params: { query: cmd } });
     } else {
-      const fallbackText = `I heard you, ${userName}. Say "Scan product", "Find clinic", or "Check medicine".`;
+      const fallbackText = `I heard: "${cmd}". Say "Scan product", "Find clinic", or "Check medicine".`;
       setVoiceNotice(fallbackText);
-      speakWithCartesia(fallbackText);
+      if (shouldSpeak) {
+        speakWithCartesia(fallbackText);
+      }
       setTimeout(() => {
         setVoiceNotice((prev) => (prev === fallbackText ? null : prev));
-      }, 7000);
+      }, 5000);
     }
   };
 
