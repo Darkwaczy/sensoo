@@ -12,13 +12,25 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { initAuth } from '../services/authService';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
   const spinAnim = useRef(new Animated.Value(0)).current;
+  const targetRouteRef = useRef<string>('/onboarding');
 
   useEffect(() => {
+    // Check persistent session immediately
+    initAuth()
+      .then((state) => {
+        if (state.isAuthenticated && state.user) {
+          targetRouteRef.current = '/home';
+        }
+      })
+      .catch(() => {});
+
     // Smooth continuous rotation loop
     const animation = Animated.loop(
       Animated.timing(spinAnim, {
@@ -30,10 +42,10 @@ export default function SplashScreen() {
     );
     animation.start();
 
-    // Auto-advance to onboarding screen after simulated load
+    // Auto-advance to destination after brand display
     const timer = setTimeout(() => {
-      router.replace('/onboarding' as any);
-    }, 2500);
+      router.replace(targetRouteRef.current as any);
+    }, 2000);
 
     return () => {
       animation.stop();
@@ -50,7 +62,7 @@ export default function SplashScreen() {
     <TouchableOpacity
       activeOpacity={1}
       style={styles.container}
-      onPress={() => router.replace('/onboarding' as any)}
+      onPress={() => router.replace(targetRouteRef.current as any)}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent />
 

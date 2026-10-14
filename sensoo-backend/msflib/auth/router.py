@@ -66,8 +66,11 @@ def router(
         session: Session = Depends(get_session),
     ) -> Any:
         # Check existing account
+        clean_email = account_in.email.strip().lower()
         existing = session.exec(
-            select(account_type).where(account_type.email == account_in.email)
+            select(account_type).where(
+                (account_type.email == clean_email) | (account_type.email == account_in.email.strip())
+            )
         ).first()
         if existing:
             raise HTTPException(
@@ -77,7 +80,7 @@ def router(
 
         hashed = get_password_hash(account_in.password)
         account = account_type(
-            email=account_in.email,
+            email=clean_email,
             hashed_password=hashed,
             full_name=account_in.full_name,
             phone=account_in.phone,
@@ -155,9 +158,11 @@ def router(
             email = str(form.get("username") or form.get("email") or "")
             password = str(form.get("password") or "")
 
-        email = email.strip()
+        clean_email = email.strip().lower()
         account = session.exec(
-            select(account_type).where(account_type.email == email)
+            select(account_type).where(
+                (account_type.email == clean_email) | (account_type.email == email.strip())
+            )
         ).first()
 
         if not account or not verify_password(password, account.hashed_password):

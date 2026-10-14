@@ -537,8 +537,62 @@ export async function loginUser(params: {
         requiresOtp: false,
         message: 'Signed in successfully!',
       };
-    } else if (loginRes.status !== 404) {
+    } else {
       const data = await loginRes.json().catch(() => ({}));
+
+      // Check if user account was created on this device (e.g. Render restarted and cleared ephemeral SQLite)
+      const localUsers = await loadLocalUsers();
+      const existing = localUsers[cleanEmail];
+
+      if (existing) {
+        if (existing.password && existing.password !== params.password) {
+          return {
+            success: false,
+            requiresOtp: false,
+            message: 'Incorrect password. Please verify and try again.',
+          };
+        }
+
+        // Self-heal: automatically recreate account on backend
+        let restoredToken = '';
+        try {
+          const reRegRes = await fetch(`${SENSOO_API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: cleanEmail,
+              password: params.password,
+              full_name: existing.fullName || 'Sensoo Member',
+              phone: existing.phone || '',
+              role: 'consumer',
+            }),
+          });
+          if (reRegRes.ok) {
+            const reRegData = await reRegRes.json();
+            restoredToken = reRegData.access_token || '';
+          }
+        } catch {}
+
+        currentAuth.user = {
+          id: existing.id || `USR-${Date.now().toString().slice(-6)}`,
+          fullName: existing.fullName || 'Sensoo Member',
+          email: cleanEmail,
+          phone: existing.phone || '',
+          isVerified: true,
+          token: restoredToken || undefined,
+          role: 'consumer',
+          lastLogin: new Date().toISOString(),
+        };
+        currentAuth.isAuthenticated = true;
+        await persistAuth();
+
+        return {
+          success: true,
+          requiresOtp: false,
+          message: 'Signed in successfully!',
+        };
+      }
+
       return {
         success: false,
         requiresOtp: false,
@@ -549,7 +603,7 @@ export async function loginUser(params: {
     console.warn('[AuthService] Backend login error:', err);
   }
 
-  // Backend returned 404 (Render deploying): check persistent registered user store
+  // Network offline / unreachable fallback: check local user store
   const localUsers = await loadLocalUsers();
   const existing = localUsers[cleanEmail];
 
