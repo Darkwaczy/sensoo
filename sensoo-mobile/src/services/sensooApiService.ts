@@ -43,6 +43,7 @@ export interface FeedItem {
 }
 
 import { getPersistentDeviceId } from './sensooStorageService';
+import { fetchLiveNafdacGreenbook } from './nafdacGreenbookService';
 
 // Fallback in-memory device ID
 let activeDeviceId = 'SNS-DEV-INIT';
@@ -317,7 +318,7 @@ export async function lookupLiveGtinWeb(
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
-  // 1. Direct High-Speed Gemini AI Real-Time GTIN Identification (1.2s, covers Lucozade, Dangote, Cadbury, Nivea, etc.)
+  // 1. Direct High-Speed Gemini AI Real-Time GTIN Identification (covers Lucozade, Dangote, Cadbury, Nivea, etc.)
   const geminiKey = getGeminiApiKey();
   if (geminiKey) {
     try {
@@ -333,7 +334,7 @@ export async function lookupLiveGtinWeb(
               {
                 parts: [
                   {
-                    text: `Identify the commercial product for barcode ${digits}. If recognized as a commercial retail product in Nigeria or globally, return strictly JSON: {"found": true, "product_name": "...", "brand": "...", "category": "..."}. If completely unknown, return {"found": false}.`,
+                    text: `You are an exact product barcode database. Barcode to verify: "${digits}". CRITICAL: Only return found: true if you know with 100% certainty the exact verified commercial brand and product name for this specific barcode. NEVER guess, invent, or approximate product or medicine names. If you are not completely certain, return strictly JSON: {"found": false}. If 100% certain: {"found": true, "product_name": "...", "brand": "...", "category": "..."}.`,
                   },
                 ],
               },
@@ -402,17 +403,25 @@ export async function lookupLiveGtinWeb(
           cleanTitle = cleanTitle.replace(/\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga|Walmart|Jomashop).*$/i, '').trim();
           const lower = cleanTitle.toLowerCase();
 
-          if (
-            cleanTitle &&
-            cleanTitle.length > 3 &&
-            !lower.startsWith('barcode lookup') &&
-            !lower.startsWith('upc lookup') &&
-            !lower.startsWith('ean search') &&
-            !lower.startsWith('free barcode') &&
-            !lower.includes('search upc') &&
-            !lower.includes('look up any upc') &&
-            !lower.includes('upcitemdb')
-          ) {
+          const isInvalidTitle =
+            lower.startsWith('barcode lookup') ||
+            lower.startsWith('upc lookup') ||
+            lower.startsWith('ean search') ||
+            lower.startsWith('free barcode') ||
+            lower.includes('search upc') ||
+            lower.includes('look up any upc') ||
+            lower.includes('upcitemdb') ||
+            lower.includes('list of') ||
+            lower.includes('buy online') ||
+            lower.includes('pharmacy online') ||
+            lower.includes('medicines in') ||
+            lower.includes('best prices') ||
+            lower.includes('directory') ||
+            lower.includes('portal') ||
+            cleanTitle.length < 4 ||
+            cleanTitle.length > 70;
+
+          if (cleanTitle && !isInvalidTitle) {
             let brand = 'Verified Brand';
             if (lower.includes('smart')) brand = 'Smart Collection';
             else if (lower.includes('dr.') || lower.includes('rashel')) brand = 'Dr. Rashel';
@@ -465,7 +474,7 @@ export async function lookupLiveGtinWeb(
             {
               role: 'system',
               content:
-                'You are a global product barcode identification database. Given a retail barcode (EAN-13, UPC-A, GTIN), return strictly JSON: {"found": true, "product_name": "...", "brand": "..."} or {"found": false}. Never invent or guess names if unknown.',
+                'You are an authoritative global product barcode registry validator. For barcode digits, check for an exact commercial product match. CRITICAL: Never invent, guess, or hallucinate names. If not 100% certain of the exact real-world match, return strictly JSON: {"found": false}. If 100% certain: {"found": true, "product_name": "...", "brand": "..."}.',
             },
             {
               role: 'user',
@@ -638,6 +647,51 @@ export async function verifyScanOnline(
     }
   }
 
+  // Tier 1.5: Direct NAFDAC Greenbook Official Registry Lookup (8,943+ approved medicines/devices)
+  try {
+    const nafdacRes = await fetchLiveNafdacGreenbook(cleanCode, 'All', 'All', 5);
+    if (nafdacRes && nafdacRes.products && nafdacRes.products.length > 0) {
+      const cleanUpper = cleanCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const matched = nafdacRes.products.find((p) => {
+        const nrnUpper = (p.nrn || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const codeUpper = (p.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return nrnUpper === cleanUpper || codeUpper === cleanUpper;
+      }) || (nafdacRes.products.length === 1 ? nafdacRes.products[0] : null);
+
+      if (matched) {
+        const isAuthentic = matched.status === 'Active';
+        fetch(`${SENSOO_API_BASE_URL}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: cleanCode,
+            product_name: matched.productName,
+            manufacturer: matched.applicantName,
+            batch_id: `NAFDAC-${matched.nrn}`,
+            region: 'GLOBAL',
+            state: isAuthentic ? 'IN_STOCK' : 'FLAGGED',
+          }),
+        }).catch(() => {});
+
+        return {
+          status: isAuthentic ? 'AUTHENTIC' : 'FAKE',
+          reason: isAuthentic
+            ? `Verified in NAFDAC Greenbook Official Registry (NRN: ${matched.nrn})`
+            : (matched.statusReason || `NAFDAC Registration Inactive or Delisted (NRN: ${matched.nrn})`),
+          alarms: isAuthentic ? [] : ['Inactive / Delisted NAFDAC Registration'],
+          new_state: isAuthentic ? 'IN_STOCK' : 'FLAGGED',
+          product_name: matched.productName,
+          manufacturer: matched.applicantName || 'NAFDAC Approved Manufacturer',
+          batch_id: `NAFDAC-${matched.nrn}`,
+          nafdac: matched.nrn,
+          category: matched.productCategory,
+        };
+      }
+    }
+  } catch {
+    // Continue quietly
+  }
+
   // 1. Try Live Sensoo Backend for audit telemetry
   let backendData: ScanApiResponse | null = null;
   try {
@@ -684,7 +738,7 @@ export async function verifyScanOnline(
     }
   }
 
-  // 3. Dual-Layer Real-Time Verification: Tier 1 - OpenFoodFacts
+  // Tier 2: OpenFoodFacts Global Barcode Whitelist
   const offHit = await lookupOpenFoodFacts(cleanCode);
   if (offHit) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
@@ -712,36 +766,7 @@ export async function verifyScanOnline(
     };
   }
 
-  // Tier 2 - Universal Real-Time Web & GS1 GTIN Search (Exact Match via Gemini & Web)
-  const webHit = await lookupLiveGtinWeb(cleanCode);
-  if (webHit) {
-    fetch(`${SENSOO_API_BASE_URL}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        code: cleanCode,
-        product_name: webHit.productName,
-        manufacturer: webHit.brand,
-        batch_id: webHit.batch,
-        region: 'GLOBAL',
-        state: 'IN_STOCK',
-      }),
-    }).catch(() => {});
-
-    return {
-      status: (webHit.status as any) || 'AUTHENTIC',
-      reason: webHit.origin
-        ? `Verified GS1 Standard Barcode (${webHit.origin})`
-        : 'Verified in Live Global GS1 & Web Product Registry',
-      alarms: [],
-      new_state: 'IN_STOCK',
-      product_name: webHit.productName,
-      manufacturer: webHit.brand,
-      batch_id: webHit.batch,
-    };
-  }
-
-  // Tier 3 - UPCitemdb Commercial Retail Database
+  // Tier 3: UPCitemdb Commercial Retail Database (Authoritative exact barcode catalog)
   const upcHit = await lookupUpcItemDb(cleanCode);
   if (upcHit) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
@@ -769,7 +794,7 @@ export async function verifyScanOnline(
     };
   }
 
-  // Tier 4 - EMDEX Nigeria Drug Database
+  // Tier 4: EMDEX Nigeria Drug Database
   const emdexHit = await lookupEmdexDrug(cleanCode);
   if (emdexHit) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
@@ -793,6 +818,35 @@ export async function verifyScanOnline(
       product_name: emdexHit.productName,
       manufacturer: emdexHit.brand,
       batch_id: emdexHit.batch,
+    };
+  }
+
+  // Tier 5: Universal Real-Time Web & GS1 GTIN Search (Exact Match via Gemini & Web)
+  const webHit = await lookupLiveGtinWeb(cleanCode);
+  if (webHit) {
+    fetch(`${SENSOO_API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: cleanCode,
+        product_name: webHit.productName,
+        manufacturer: webHit.brand,
+        batch_id: webHit.batch,
+        region: 'GLOBAL',
+        state: 'IN_STOCK',
+      }),
+    }).catch(() => {});
+
+    return {
+      status: (webHit.status as any) || 'AUTHENTIC',
+      reason: webHit.origin
+        ? `Verified GS1 Standard Barcode (${webHit.origin})`
+        : 'Verified in Live Global GS1 & Web Product Registry',
+      alarms: [],
+      new_state: 'IN_STOCK',
+      product_name: webHit.productName,
+      manufacturer: webHit.brand,
+      batch_id: webHit.batch,
     };
   }
 

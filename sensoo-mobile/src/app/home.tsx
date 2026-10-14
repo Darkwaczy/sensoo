@@ -80,6 +80,12 @@ interface RecentScanItem {
   dateGroup: 'Today' | 'Yesterday';
   scenario: 'AUTHENTIC' | 'COUNTERFEIT' | 'ALREADY_PURCHASED' | 'IMPOSSIBLE_TRAVEL' | 'WRONG_REGION';
   code: string;
+  manufacturer?: string;
+  batchId?: string;
+  nafdac?: string;
+  expiryDate?: string;
+  reason?: string;
+  imageUrl?: string;
 }
 
 const RECENT_SCANS_DATA: RecentScanItem[] = [];
@@ -176,12 +182,18 @@ export default function HomeScreen() {
           id: s.id || `stored-${idx}`,
           name: s.name,
           image: s.imageUrl ? { uri: s.imageUrl } : require('../../assets/barcode_icon.png'),
+          imageUrl: s.imageUrl,
           status: s.status,
           statusText: s.statusText,
           time: s.time,
           dateGroup: 'Today',
           scenario: s.scenario,
           code: s.code,
+          manufacturer: s.manufacturer,
+          batchId: s.batchId,
+          nafdac: s.nafdac,
+          expiryDate: s.expiryDate,
+          reason: s.reason,
         }));
         setRecentScans(mapped);
       });
@@ -207,12 +219,18 @@ export default function HomeScreen() {
         id: s.id || `stored-${idx}`,
         name: s.name,
         image: s.imageUrl ? { uri: s.imageUrl } : require('../../assets/barcode_icon.png'),
+        imageUrl: s.imageUrl,
         status: s.status,
         statusText: s.statusText,
         time: s.time,
         dateGroup: 'Today',
         scenario: s.scenario,
         code: s.code,
+        manufacturer: s.manufacturer,
+        batchId: s.batchId,
+        nafdac: s.nafdac,
+        expiryDate: s.expiryDate,
+        reason: s.reason,
       }));
       setRecentScans(mapped);
     });
@@ -705,10 +723,46 @@ export default function HomeScreen() {
     router.push('/scanner' as any);
   };
 
-  const navigateToResult = (scenario: string, code: string) => {
+  const navigateToResult = (itemOrScenario: RecentScanItem | string, maybeCode?: string) => {
+    if (typeof itemOrScenario === 'string') {
+      const scenario = itemOrScenario;
+      const code = maybeCode || '';
+      const matched = recentScans.find((s) => s.code === code);
+      router.push({
+        pathname: '/result',
+        params: {
+          scenario,
+          code,
+          productName: matched?.name,
+          manufacturer: matched?.manufacturer,
+          batchId: matched?.batchId,
+          nafdac: matched?.nafdac,
+          expiryDate: matched?.expiryDate,
+          reason: matched?.reason,
+          imageUrl: matched?.imageUrl,
+          scanTime: matched?.time,
+          isHistoryInspection: 'true',
+        },
+      });
+      return;
+    }
+
+    const item = itemOrScenario;
     router.push({
       pathname: '/result',
-      params: { scenario, code },
+      params: {
+        scenario: item.scenario,
+        code: item.code,
+        productName: item.name,
+        manufacturer: item.manufacturer,
+        batchId: item.batchId,
+        nafdac: item.nafdac,
+        expiryDate: item.expiryDate,
+        reason: item.reason,
+        imageUrl: item.imageUrl,
+        scanTime: item.time,
+        isHistoryInspection: 'true',
+      },
     });
   };
 
@@ -918,7 +972,7 @@ export default function HomeScreen() {
                 key={item.id}
                 style={styles.scanCard}
                 activeOpacity={0.85}
-                onPress={() => navigateToResult(item.scenario, item.code)}
+                onPress={() => navigateToResult(item)}
               >
                 <View style={styles.thumbWrapper}>
                   <Image source={item.image} style={styles.thumbImage} resizeMode="contain" />
@@ -1031,7 +1085,7 @@ export default function HomeScreen() {
                       key={item.id}
                       style={styles.subListItemCard}
                       activeOpacity={0.85}
-                      onPress={() => navigateToResult(item.scenario, item.code)}
+                      onPress={() => navigateToResult(item)}
                     >
                       <View style={styles.subListThumbWrapper}>
                         <Image source={item.image} style={styles.subListThumb} resizeMode="contain" />
@@ -1079,7 +1133,7 @@ export default function HomeScreen() {
                       key={item.id}
                       style={styles.subListItemCard}
                       activeOpacity={0.85}
-                      onPress={() => navigateToResult(item.scenario, item.code)}
+                      onPress={() => navigateToResult(item)}
                     >
                       <View style={styles.subListThumbWrapper}>
                         <Image source={item.image} style={styles.subListThumb} resizeMode="contain" />

@@ -170,6 +170,8 @@ export default function ResultScreen() {
     nafdac?: string;
     conflictCity?: string;
     conflictTime?: string;
+    isHistoryInspection?: string;
+    scanTime?: string;
   }>();
 
   // Determine initial scenario from param or match from code
@@ -210,9 +212,9 @@ export default function ResultScreen() {
     ? { uri: params.imageUrl }
     : (activeScenario === 'COUNTERFEIT' ? baseConfig.heroImage : baseConfig.productImage);
 
-  // Automatically persist every scanned item to local recent scans
+  // Automatically persist fresh camera scans to local recent scans (skip if merely inspecting from history!)
   useEffect(() => {
-    if (params.code) {
+    if (params.code && params.isHistoryInspection !== 'true') {
       saveScanToLocalHistory({
         name: resolvedProductName.replace('\n', ' '),
         code: params.code,
@@ -222,10 +224,13 @@ export default function ResultScreen() {
         imageUrl: params.imageUrl,
         manufacturer: params.manufacturer,
         batchId: params.batchId,
+        nafdac: params.nafdac,
+        expiryDate: params.expiryDate,
+        reason: params.reason,
         time: nowTime,
       }).catch((err) => console.warn('Auto-save scan error:', err));
     }
-  }, [params.code, activeScenario, resolvedProductName]);
+  }, [params.code, activeScenario, resolvedProductName, params.isHistoryInspection]);
 
   const config = {
     ...baseConfig,
@@ -239,12 +244,17 @@ export default function ResultScreen() {
       { label: 'NAFDAC / NAPAMS', value: activeScenario === 'COUNTERFEIT' ? '❌ Not Found in NAFDAC' : (params.nafdac || 'Refer to packaging') },
       { label: 'Expiry Date', value: activeScenario === 'COUNTERFEIT' ? 'Unregulated / Expired Risk' : (params.expiryDate || 'Printed on pack (1D barcode)') },
       { label: 'Batch ID', value: params.batchId || (activeScenario === 'COUNTERFEIT' ? 'Not in Registry' : 'VERIFIED-REGISTRY') },
-      { label: 'Scan Time', value: `Today, ${nowTime}` },
+      { label: 'Scan Time', value: params.scanTime || `Today, ${nowTime}` },
       { label: 'Registry Status', value: activeScenario === 'AUTHENTIC' ? '✓ Whitelist Confirmed' : (activeScenario === 'COUNTERFEIT' ? '❌ No Record Found' : '⚠️ Security Flag') },
     ],
   };
 
   const handleSecondaryAction = () => {
+    if (params.isHistoryInspection === 'true') {
+      router.back();
+      return;
+    }
+
     if (activeScenario === 'COUNTERFEIT' || activeScenario === 'IMPOSSIBLE_TRAVEL') {
       router.push({
         pathname: '/report-product',
@@ -282,7 +292,10 @@ export default function ResultScreen() {
         imageUrl: params.imageUrl,
         manufacturer: params.manufacturer,
         batchId: params.batchId,
-        time: ''
+        nafdac: params.nafdac,
+        expiryDate: params.expiryDate,
+        reason: params.reason,
+        time: nowTime,
       }).catch((err) => console.warn('Failed to save to local history:', err));
 
       router.push({
@@ -297,7 +310,11 @@ export default function ResultScreen() {
   };
 
   const handleDone = () => {
-    router.replace('/scanner');
+    if (params.isHistoryInspection === 'true') {
+      router.back();
+    } else {
+      router.replace('/scanner');
+    }
   };
 
   return (

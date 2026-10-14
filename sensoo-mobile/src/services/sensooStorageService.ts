@@ -15,6 +15,9 @@ export interface StoredScanItem {
   category?: string;
   batchId?: string;
   manufacturer?: string;
+  nafdac?: string;
+  expiryDate?: string;
+  reason?: string;
 }
 
 export interface DeviceLinkInfo {
@@ -160,6 +163,9 @@ export async function saveScanToLocalHistory(item: Omit<StoredScanItem, 'id' | '
     category: item.category,
     batchId: item.batchId,
     manufacturer: item.manufacturer,
+    nafdac: item.nafdac,
+    expiryDate: item.expiryDate,
+    reason: item.reason,
   };
 
   try {
