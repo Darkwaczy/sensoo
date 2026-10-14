@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { startRenderKeepAlive } from '../services/renderKeepAliveService';
+import AutoUpdateBanner from '../components/AutoUpdateBanner';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -16,6 +17,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <AutoUpdateBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="onboarding" />

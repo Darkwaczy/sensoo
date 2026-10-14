@@ -14,10 +14,12 @@ import {
   Modal,
   KeyboardAvoidingView,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Speech from 'expo-speech';
+import * as Updates from 'expo-updates';
 import {
   useAudioRecorder,
   RecordingPresets,
@@ -443,6 +445,57 @@ export default function HomeScreen() {
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [agentInput, setAgentInput] = useState('');
+  const [isCheckingAppUpdate, setIsCheckingAppUpdate] = useState(false);
+
+  const handleManualCheckUpdates = async () => {
+    if (!Updates.isEnabled) {
+      Alert.alert(
+        'App Updates',
+        'Live over-the-air updates are active in standalone installed APK builds.'
+      );
+      return;
+    }
+
+    try {
+      setIsCheckingAppUpdate(true);
+      const check = await Updates.checkForUpdateAsync();
+      if (check.isAvailable) {
+        Alert.alert(
+          'Update Found!',
+          'A new version of Sensoo is ready to install. Download and restart now?',
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Download & Restart',
+              onPress: async () => {
+                try {
+                  setIsCheckingAppUpdate(true);
+                  await Updates.fetchUpdateAsync();
+                  await Updates.reloadAsync();
+                } catch (e) {
+                  Alert.alert('Update Error', 'Could not apply update. Please try again.');
+                } finally {
+                  setIsCheckingAppUpdate(false);
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Up to Date ✓',
+          'You are already running the latest version of Sensoo (Release 1.0.0).'
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        'Check Failed',
+        'Unable to reach update servers. Please check your internet connection.'
+      );
+    } finally {
+      setIsCheckingAppUpdate(false);
+    }
+  };
 
   // Voice Assistant ("Hey Sensoo") State & Foreground Listener
   const [voiceSettings, setVoiceSettings] = useState<VoiceAssistantSettings>(getVoiceAssistantSettings());
@@ -1710,6 +1763,43 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <Text style={styles.profileMenuSubtitle}>"Hey Sensoo" hands-free & voiceprint</Text>
+                </View>
+                <Text style={styles.profileMenuChevron}>›</Text>
+              </TouchableOpacity>
+
+              {/* Check for App Updates */}
+              <TouchableOpacity
+                style={styles.profileMenuItemCard}
+                activeOpacity={0.75}
+                disabled={isCheckingAppUpdate}
+                onPress={handleManualCheckUpdates}
+              >
+                <View style={[styles.profileMenuIconBox, { backgroundColor: '#EEF2FF' }]}>
+                  {isCheckingAppUpdate ? (
+                    <ActivityIndicator size="small" color="#4F46E5" />
+                  ) : (
+                    <Text style={{ fontSize: 18 }}>🚀</Text>
+                  )}
+                </View>
+                <View style={styles.profileMenuMeta}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.profileMenuTitle}>Check for Updates</Text>
+                    <View
+                      style={{
+                        backgroundColor: '#E0E7FF',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#4338CA' }}>
+                        OTA
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.profileMenuSubtitle}>
+                    {isCheckingAppUpdate ? 'Connecting to EAS servers...' : 'Release 1.0.0 • Tap to check'}
+                  </Text>
                 </View>
                 <Text style={styles.profileMenuChevron}>›</Text>
               </TouchableOpacity>
