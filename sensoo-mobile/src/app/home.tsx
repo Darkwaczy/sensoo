@@ -483,20 +483,29 @@ export default function HomeScreen() {
 
       if (recordedUri && !isTranscribingRef.current) {
         isTranscribingRef.current = true;
+        setVoiceNotice('Processing voice...');
         try {
           const transcript = await transcribeAudioWithGroq(recordedUri);
           console.log('[VoiceAssistant] Groq Whisper transcript:', transcript);
           if (transcript && transcript.trim().length > 0) {
             handleVoiceCommand(transcript.trim());
+          } else {
+            // No speech detected, default to friendly greeting
+            handleVoiceCommand('Hey Sensoo');
           }
         } catch (err) {
           console.warn('[VoiceAssistant] Groq Whisper transcription error:', err);
+          // If network / API error, still acknowledge the user warmly
+          handleVoiceCommand('Hey Sensoo');
         } finally {
           isTranscribingRef.current = false;
         }
+      } else {
+        handleVoiceCommand('Hey Sensoo');
       }
     } catch (err) {
       console.warn('[VoiceAssistant] Error stopping recording:', err);
+      handleVoiceCommand('Hey Sensoo');
     }
   };
 
@@ -519,22 +528,22 @@ export default function HomeScreen() {
       });
 
       console.log('[VoiceAssistant] Listening to voice...');
+      setVoiceNotice('Listening... Say "Hey Sensoo"');
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsVoiceListening(true);
 
-      // Single Tap Experience: listens for 3.5s command window then auto-executes seamlessly
+      // Single Tap Experience: listens for 4s command window then auto-executes seamlessly
       if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = setTimeout(() => {
         stopAndExecuteVoice();
-      }, 3500);
+      }, 4000);
     } catch (err) {
       console.warn('[VoiceAssistant] Error starting voice recording:', err);
       setIsVoiceListening(false);
+      setVoiceNotice(null);
     }
   };
-
-
 
   const handleVoiceCommand = (cmd: string) => {
     setIsVoiceListening(false);
@@ -545,8 +554,9 @@ export default function HomeScreen() {
     const parsed = parseVoiceCommand(cmd);
     console.log('[VoiceAssistant] Parsed Intent:', parsed.intent, 'for text:', cmd);
 
+    const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
+
     if (parsed.intent === 'GREETING') {
-      const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
       const greetingText = `Hello, ${userName}. What product are we scanning today?`;
       setVoiceNotice(greetingText);
       speakWithCartesia(greetingText);
@@ -555,14 +565,24 @@ export default function HomeScreen() {
       }, 7000);
       return;
     } else if (parsed.intent === 'SCAN') {
+      setVoiceNotice('Opening scanner...');
+      speakWithCartesia('Opening scanner');
       router.push('/scanner');
     } else if (parsed.intent === 'CLINIC') {
+      setVoiceNotice('Finding nearby clinics...');
+      speakWithCartesia('Finding nearby clinics');
       router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } });
     } else if (parsed.intent === 'REPORT') {
+      setVoiceNotice('Opening report center...');
+      speakWithCartesia('Opening safety report');
       router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } });
     } else if (parsed.intent === 'HISTORY') {
+      setVoiceNotice('Opening scan history...');
+      speakWithCartesia('Opening recent scan history');
       setActiveView('RecentScans');
     } else if (parsed.intent === 'ALERTS') {
+      setVoiceNotice('Opening safety alerts...');
+      speakWithCartesia('Opening drug and safety alerts');
       setActiveView('Alerts');
     } else if (parsed.intent === 'PROFILE') {
       setActiveView('Profile');
@@ -580,8 +600,12 @@ export default function HomeScreen() {
     } else if (parsed.intent === 'GUIDANCE') {
       router.push({ pathname: '/agent', params: { query: cmd } });
     } else {
-      // UNKNOWN: do not arbitrarily jump into agent or another page!
-      console.log('[VoiceAssistant] Command not recognized, staying on current screen.');
+      const fallbackText = `I heard you, ${userName}. Say "Scan product", "Find clinic", or "Check medicine".`;
+      setVoiceNotice(fallbackText);
+      speakWithCartesia(fallbackText);
+      setTimeout(() => {
+        setVoiceNotice((prev) => (prev === fallbackText ? null : prev));
+      }, 7000);
     }
   };
 

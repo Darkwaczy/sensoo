@@ -317,39 +317,41 @@ import * as FileSystem from 'expo-file-system/legacy';
  * Hidden from screen display; outputs clean string for command dispatch.
  */
 export const transcribeAudioWithGroq = async (audioUri: string): Promise<string> => {
-  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
+  const apiKey = (process.env.EXPO_PUBLIC_GROQ_API_KEY || '').trim();
 
-  if (!audioUri) {
-    throw new Error('No audio file URI provided');
-  }
-
-  const uploadResult = await FileSystem.uploadAsync(
-    'https://api.groq.com/openai/v1/audio/transcriptions',
-    audioUri,
-    {
-      httpMethod: 'POST',
-      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-      fieldName: 'file',
-      parameters: {
-        model: 'whisper-large-v3-turbo',
-        language: 'en',
-        response_format: 'json',
-      },
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    }
-  );
-
-  if (uploadResult.status < 200 || uploadResult.status >= 300) {
-    console.warn(`Groq transcription failed [${uploadResult.status}]:`, uploadResult.body);
-    throw new Error(`Groq Whisper error (${uploadResult.status}): ${uploadResult.body}`);
+  if (!apiKey || !audioUri) {
+    console.warn('[VoiceAssistant] Missing Groq API key or audio URI, skipping cloud transcription');
+    return '';
   }
 
   try {
+    const uploadResult = await FileSystem.uploadAsync(
+      'https://api.groq.com/openai/v1/audio/transcriptions',
+      audioUri,
+      {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        parameters: {
+          model: 'whisper-large-v3-turbo',
+          language: 'en',
+          response_format: 'json',
+        },
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      }
+    );
+
+    if (uploadResult.status < 200 || uploadResult.status >= 300) {
+      console.warn(`[VoiceAssistant] Groq transcription failed [${uploadResult.status}]:`, uploadResult.body);
+      return '';
+    }
+
     const data = JSON.parse(uploadResult.body);
     return data?.text || '';
-  } catch {
+  } catch (err) {
+    console.warn('[VoiceAssistant] Groq Whisper network error:', err);
     return '';
   }
 };

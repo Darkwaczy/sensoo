@@ -1,0 +1,41 @@
+# EAS Build Ignore Configuration
+# node_modules
+node_modules/
+
+# Expo / build artifacts
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+example
+
+# generated native folders
+/ios
+/android
+
+# Allow .env to be uploaded to EAS builds
+!.env
