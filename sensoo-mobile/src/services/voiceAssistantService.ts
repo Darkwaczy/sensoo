@@ -38,7 +38,7 @@ let currentSettings: VoiceAssistantSettings = {
   enabled: true,
   isVoiceTrained: true,
   voicePrintHash: 'VP-SENSOO-ACTIVE-01',
-  voiceReplyEnabled: false, // default silent execution as user requested
+  voiceReplyEnabled: true, // enabled by default so assistant speaks back
   visualGlowEnabled: true,
   trainingDate: 'Calibrated (Ready)',
 };
@@ -116,6 +116,9 @@ export const parseVoiceCommand = (transcript: string): ParsedVoiceCommand => {
     normalized.includes('hay sensoo') ||
     normalized.includes('hey censu') ||
     normalized.includes('hey sensor') ||
+    normalized.includes('hey sansa') ||
+    normalized.includes('sansa') ||
+    normalized.includes('sensor') ||
     normalized.includes('sensoo');
 
   // Strip wake phrase for intent classification
@@ -124,6 +127,9 @@ export const parseVoiceCommand = (transcript: string): ParsedVoiceCommand => {
     .replace(/hay\s+sensoo/gi, '')
     .replace(/hey\s+censu/gi, '')
     .replace(/hey\s+sensor/gi, '')
+    .replace(/hey\s+sansa/gi, '')
+    .replace(/sansa/gi, '')
+    .replace(/sensor/gi, '')
     .replace(/sensoo/gi, '')
     .trim();
 
@@ -337,6 +343,7 @@ export const transcribeAudioWithGroq = async (audioUri: string): Promise<string>
           model: 'whisper-large-v3-turbo',
           language: 'en',
           response_format: 'json',
+          prompt: 'Sensoo, Hey Sensoo, NAFDAC, GS1, Nigeria, medicine, clinic',
         },
         headers: {
           Authorization: `Bearer ${apiKey}`,
