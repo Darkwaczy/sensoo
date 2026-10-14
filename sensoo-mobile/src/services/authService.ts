@@ -153,13 +153,13 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
   <meta name="supported-color-schemes" content="light dark" />
-  <title>Your Sensoo verification code</title>
+  <title>${cleanCode} is your Sensoo verification code</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #F3F4F3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
   
   <!-- Preheader Snippet for Inbox Preview (Matches Gmail preview pane) -->
   <div style="display: none; font-size: 1px; color: #FFFFFF; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
-    Your Sensoo verification code is ${formattedCode}. Enter this code on Sensoo to complete your signup.
+    ${cleanCode} is your Sensoo verification code. Enter this code on Sensoo to complete your verification.
   </div>
 
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F3F4F3; padding: 32px 12px;">
@@ -214,7 +214,7 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
                       <tr>
                         <td align="left" valign="middle">
                           <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 35px; font-weight: 800; color: #0B2215; letter-spacing: 4px; display: inline-block; line-height: 1; user-select: all; -webkit-user-select: all; -moz-user-select: all; cursor: pointer;">
-                            ${formattedCode}
+                            ${cleanCode}
                           </span>
                         </td>
                         <td align="right" valign="middle">
@@ -343,13 +343,193 @@ async function sendResendEmailDirect(toEmail: string, otpCode: string, userName?
       body: JSON.stringify({
         from: from,
         to: [toEmail.trim()],
-        subject: 'Your Sensoo verification code',
+        subject: `${cleanCode} is your Sensoo verification code`,
         html,
       }),
     });
     return res.ok;
   } catch (err) {
     console.warn('[AuthService] Resend direct send failed:', err);
+    return false;
+  }
+}
+
+/**
+ * Generates an inspiring, personal welcome letter thanking the user for joining the fight against counterfeit goods in Nigeria.
+ */
+export function generateWelcomeLetterHtml(userName?: string, toEmail?: string): string {
+  let firstName = 'there';
+  if (userName && userName.trim()) {
+    const parts = userName.trim().split(/\s+/);
+    if (parts.length > 0 && parts[0]) {
+      firstName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    }
+  } else if (toEmail && toEmail.trim()) {
+    const local = toEmail.trim().split('@')[0];
+    const cleaned = local.replace(/[._+-]/g, ' ').split(/\s+/)[0];
+    if (cleaned) {
+      firstName = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+  }
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
+  <title>Welcome to Sensoo — Thank you for standing up for Nigeria 🇳🇬</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F3F4F3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
+  
+  <!-- Preheader Snippet for Inbox Preview -->
+  <div style="display: none; font-size: 1px; color: #FFFFFF; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    You are not just a user. You are now a guardian against counterfeit goods in Nigeria.
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F3F4F3; padding: 32px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card Container -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 580px; width: 100%; background-color: #F7F6F2; border-radius: 20px; overflow: hidden; border: 1px solid #E2E6E2; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);">
+          
+          <!-- Inner Content Padding -->
+          <tr>
+            <td style="padding: 32px 32px 28px 32px;">
+              
+              <!-- Brand Header Row with Official Sensoo Logo -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 26px;">
+                <tr>
+                  <td align="left" valign="middle" style="width: 50%;">
+                    <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/logo_v2.png" alt="Sensoo Logo" width="140" style="display: block; border: 0; width: 140px; height: auto; outline: none;" />
+                  </td>
+                  <td align="right" valign="middle" style="width: 50%;">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 700; color: #0C3823; letter-spacing: 1.5px; line-height: 1.35; text-transform: uppercase;">
+                      TRUSTED PRODUCTS.<br />HEALTHIER PEOPLE.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Letter Subheader -->
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; color: #2E7D32; letter-spacing: 1.8px; text-transform: uppercase; margin-bottom: 8px;">
+                OFFICIAL WELCOME &middot; NIGERIA 🇳🇬
+              </div>
+              <h1 style="margin: 0 0 20px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 24px; font-weight: 800; color: #0B2215; line-height: 1.25; letter-spacing: -0.4px;">
+                Thank you for standing with us.
+              </h1>
+
+              <!-- Letter Body Content (No links, pure authentic letter) -->
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.65; color: #334155;">
+                <p style="margin: 0 0 16px 0; font-weight: 600; color: #0B2215;">
+                  Dear ${firstName},
+                </p>
+                
+                <p style="margin: 0 0 16px 0;">
+                  Welcome to the Sensoo family.
+                </p>
+
+                <p style="margin: 0 0 16px 0;">
+                  Every single day across our markets and pharmacies, millions of fake medicines, hazardous cosmetics, and substandard everyday goods enter circulation. These counterfeits are not just unauthorized copies; they steal honest Nigerians’ hard-earned money, cause preventable sickness, and take lives that should have been protected.
+                </p>
+
+                <p style="margin: 0 0 16px 0;">
+                  When you signed up for Sensoo, you did something far bigger than creating an account. <strong style="color: #0B2215;">You took a stand for the safety of our country.</strong>
+                </p>
+
+                <!-- Highlight Box -->
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #E7F0ED; border-left: 4px solid #0C3823; border-radius: 8px; margin: 20px 0;">
+                  <tr>
+                    <td style="padding: 16px 20px;">
+                      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; line-height: 1.55; color: #0B2215;">
+                        From this moment on, every product barcode or verification code you scan before buying is an act of defense:
+                        <ul style="margin: 10px 0 0 0; padding-left: 18px;">
+                          <li style="margin-bottom: 8px;"><strong>You protect your family and loved ones</strong> from toxic, unverified formulas.</li>
+                          <li style="margin-bottom: 8px;"><strong>You choke off revenue</strong> for criminal counterfeiters who exploit our people.</li>
+                          <li style="margin-bottom: 0;"><strong>You help restore integrity to Nigeria’s markets</strong>, proving that our people’s health is not for sale.</li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin: 0 0 16px 0;">
+                  We built Sensoo so you never have to guess, doubt, or gamble with what you put into your body or bring into your home. Whenever you are in a pharmacy or store, just pull out your phone and let the app verify the product for you.
+                </p>
+
+                <p style="margin: 0 0 24px 0;">
+                  Thank you for choosing to be part of the solution. Together, we are building a safer Nigeria for our children, our parents, and our communities.
+                </p>
+
+                <p style="margin: 0; line-height: 1.5;">
+                  With deep respect and gratitude,<br />
+                  <strong style="color: #0B2215; font-size: 16px;">The Sensoo Team</strong><br />
+                  <span style="font-size: 13px; color: #64748B;">Protecting Lives. Safeguarding Nigeria.</span>
+                </p>
+              </div>
+
+            </td>
+          </tr>
+
+          <!-- Footer Banner -->
+          <tr>
+            <td style="padding: 0; margin: 0; line-height: 0;">
+              <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/footer.png" alt="Sensoo - Trusted Products. Healthier People." width="580" style="display: block; border: 0; width: 100%; max-width: 580px; height: auto; outline: none; border-radius: 0 0 20px 20px;" />
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>`;
+}
+
+/**
+ * Dispatches the official Sensoo welcome letter directly via Resend
+ */
+export async function sendWelcomeLetterDirect(
+  toEmail: string,
+  userName?: string
+): Promise<boolean> {
+  let fallbackKey = '';
+  let fallbackFrom = 'Sensoo <verify@inboxsync.co.uk>';
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const local = require('./localResendKey');
+    fallbackKey = local.LOCAL_RESEND_KEY || '';
+    fallbackFrom = local.LOCAL_RESEND_FROM || fallbackFrom;
+  } catch {}
+
+  const key = process.env.EXPO_PUBLIC_RESEND_API_KEY || process.env.RESEND_API_KEY || fallbackKey;
+  const from = (process.env.EXPO_PUBLIC_RESEND_FROM || process.env.RESEND_FROM_EMAIL || fallbackFrom).replace(/^"|"$/g, '');
+
+  if (!key || !toEmail) {
+    return false;
+  }
+
+  const html = generateWelcomeLetterHtml(userName, toEmail);
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: from,
+        to: [toEmail.trim()],
+        subject: 'Welcome to Sensoo — Thank you for standing up for Nigeria 🇳🇬',
+        html,
+      }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[AuthService] Resend welcome letter direct send failed:', err);
     return false;
   }
 }
@@ -421,6 +601,8 @@ export async function registerUser(params: {
 
   // Dispatch directly via Resend to guarantee instant delivery even if backend email queue is blocked
   await sendResendEmailDirect(cleanEmail, localOtp, cleanName);
+  // Send the official welcome letter thanking user for standing up for Nigeria
+  sendWelcomeLetterDirect(cleanEmail, cleanName).catch(() => {});
   currentAuth.pendingOtpCode = localOtp;
 
   currentAuth.pendingOtpDestination = destination;

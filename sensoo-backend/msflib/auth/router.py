@@ -103,15 +103,19 @@ def router(
             pass
 
         try:
-            from app.email_service import send_otp_via_resend
+            from app.email_service import send_otp_via_resend, send_welcome_letter_via_resend
             await send_otp_via_resend(
                 to_email=account.email,
                 otp_code=reg_otp,
                 user_name=account.full_name,
             )
+            await send_welcome_letter_via_resend(
+                to_email=account.email,
+                user_name=account.full_name,
+            )
         except Exception as exc:
             import logging
-            logging.getLogger("sensoo.auth").error(f"Failed to dispatch registration OTP email: {exc}")
+            logging.getLogger("sensoo.auth").error(f"Failed to dispatch registration emails: {exc}")
 
         # Issue access token
         secret_key = get_secret_key()

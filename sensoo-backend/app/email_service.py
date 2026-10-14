@@ -8,12 +8,6 @@ logger = logging.getLogger("sensoo.email")
 
 def generate_otp_email_html(otp_code: str, user_name: Optional[str] = None, to_email: Optional[str] = None) -> str:
     clean_code = str(otp_code).strip()
-    if len(clean_code) == 6:
-        formatted_code = f"{clean_code[:3]} {clean_code[3:]}"
-    elif len(clean_code) == 4:
-        formatted_code = f"{clean_code[:2]} {clean_code[2:]}"
-    else:
-        formatted_code = clean_code
 
     # Extract receiver's first name
     first_name = "there"
@@ -34,13 +28,13 @@ def generate_otp_email_html(otp_code: str, user_name: Optional[str] = None, to_e
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
   <meta name="supported-color-schemes" content="light dark" />
-  <title>Your Sensoo verification code</title>
+  <title>{clean_code} is your Sensoo verification code</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #F3F4F3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
   
   <!-- Preheader Snippet for Inbox Preview (Matches Gmail preview pane) -->
   <div style="display: none; font-size: 1px; color: #FFFFFF; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
-    Your Sensoo verification code is {formatted_code}. Enter this code on Sensoo to complete your signup.
+    {clean_code} is your Sensoo verification code. Enter this code on Sensoo to complete your verification.
   </div>
 
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F3F4F3; padding: 32px 12px;">
@@ -78,7 +72,7 @@ def generate_otp_email_html(otp_code: str, user_name: Optional[str] = None, to_e
                       Here is your<br />verification code
                     </h1>
                     <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.45; color: #475569;">
-                      Hi <strong style="color: #0B2215; font-weight: 700;">{first_name}</strong>, enter this code on Sensoo to complete your signup.
+                      Hi <strong style="color: #0B2215; font-weight: 700;">{first_name}</strong>, enter this code on Sensoo to complete your verification.
                     </p>
                   </td>
                   <td align="right" valign="middle" style="width: 46%;">
@@ -87,7 +81,7 @@ def generate_otp_email_html(otp_code: str, user_name: Optional[str] = None, to_e
                 </tr>
               </table>
 
-              <!-- OTP Verification Code Box -->
+              <!-- OTP Verification Code Box (Continuous code for Gmail OTP parser & Copy Code chip) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #E7F0ED; border-radius: 14px; margin-bottom: 14px;">
                 <tr>
                   <td style="padding: 16px 22px;">
@@ -95,7 +89,7 @@ def generate_otp_email_html(otp_code: str, user_name: Optional[str] = None, to_e
                       <tr>
                         <td align="left" valign="middle">
                           <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 35px; font-weight: 800; color: #0B2215; letter-spacing: 4px; display: inline-block; line-height: 1; user-select: all; -webkit-user-select: all; -moz-user-select: all; cursor: pointer;">
-                            {formatted_code}
+                            {clean_code}
                           </span>
                         </td>
                         <td align="right" valign="middle">
@@ -215,6 +209,135 @@ def generate_otp_email_html(otp_code: str, user_name: Optional[str] = None, to_e
 </html>"""
 
 
+def generate_welcome_letter_html(user_name: Optional[str] = None, to_email: Optional[str] = None) -> str:
+    """Generates an inspiring, personal welcome letter thanking the user for joining the fight against counterfeit goods in Nigeria."""
+    first_name = "there"
+    if user_name and user_name.strip():
+        parts = user_name.strip().split()
+        if parts and parts[0]:
+            first_name = parts[0].capitalize()
+    elif to_email and to_email.strip():
+        local_part = to_email.strip().split("@")[0]
+        cleaned = local_part.replace(".", " ").replace("_", " ").replace("-", " ").split()
+        if cleaned and cleaned[0]:
+            first_name = cleaned[0].capitalize()
+
+    return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
+  <title>Welcome to Sensoo — Thank you for standing up for Nigeria 🇳🇬</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F3F4F3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
+  
+  <!-- Preheader Snippet for Inbox Preview -->
+  <div style="display: none; font-size: 1px; color: #FFFFFF; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    You are not just a user. You are now a guardian against counterfeit goods in Nigeria.
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F3F4F3; padding: 32px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card Container -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 580px; width: 100%; background-color: #F7F6F2; border-radius: 20px; overflow: hidden; border: 1px solid #E2E6E2; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);">
+          
+          <!-- Inner Content Padding -->
+          <tr>
+            <td style="padding: 32px 32px 28px 32px;">
+              
+              <!-- Brand Header Row with Official Sensoo Logo -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 26px;">
+                <tr>
+                  <td align="left" valign="middle" style="width: 50%;">
+                    <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/logo_v2.png" alt="Sensoo Logo" width="140" style="display: block; border: 0; width: 140px; height: auto; outline: none;" />
+                  </td>
+                  <td align="right" valign="middle" style="width: 50%;">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 700; color: #0C3823; letter-spacing: 1.5px; line-height: 1.35; text-transform: uppercase;">
+                      TRUSTED PRODUCTS.<br />HEALTHIER PEOPLE.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Letter Subheader -->
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; color: #2E7D32; letter-spacing: 1.8px; text-transform: uppercase; margin-bottom: 8px;">
+                OFFICIAL WELCOME &middot; NIGERIA 🇳🇬
+              </div>
+              <h1 style="margin: 0 0 20px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 24px; font-weight: 800; color: #0B2215; line-height: 1.25; letter-spacing: -0.4px;">
+                Thank you for standing with us.
+              </h1>
+
+              <!-- Letter Body Content (No links, pure authentic letter) -->
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.65; color: #334155;">
+                <p style="margin: 0 0 16px 0; font-weight: 600; color: #0B2215;">
+                  Dear {first_name},
+                </p>
+                
+                <p style="margin: 0 0 16px 0;">
+                  Welcome to the Sensoo family.
+                </p>
+
+                <p style="margin: 0 0 16px 0;">
+                  Every single day across our markets and pharmacies, millions of fake medicines, hazardous cosmetics, and substandard everyday goods enter circulation. These counterfeits are not just unauthorized copies; they steal honest Nigerians’ hard-earned money, cause preventable sickness, and take lives that should have been protected.
+                </p>
+
+                <p style="margin: 0 0 16px 0;">
+                  When you signed up for Sensoo, you did something far bigger than creating an account. <strong style="color: #0B2215;">You took a stand for the safety of our country.</strong>
+                </p>
+
+                <!-- Highlight Box -->
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #E7F0ED; border-left: 4px solid #0C3823; border-radius: 8px; margin: 20px 0;">
+                  <tr>
+                    <td style="padding: 16px 20px;">
+                      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; line-height: 1.55; color: #0B2215;">
+                        From this moment on, every product barcode or verification code you scan before buying is an act of defense:
+                        <ul style="margin: 10px 0 0 0; padding-left: 18px;">
+                          <li style="margin-bottom: 8px;"><strong>You protect your family and loved ones</strong> from toxic, unverified formulas.</li>
+                          <li style="margin-bottom: 8px;"><strong>You choke off revenue</strong> for criminal counterfeiters who exploit our people.</li>
+                          <li style="margin-bottom: 0;"><strong>You help restore integrity to Nigeria’s markets</strong>, proving that our people’s health is not for sale.</li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin: 0 0 16px 0;">
+                  We built Sensoo so you never have to guess, doubt, or gamble with what you put into your body or bring into your home. Whenever you are in a pharmacy or store, just pull out your phone and let the app verify the product for you.
+                </p>
+
+                <p style="margin: 0 0 24px 0;">
+                  Thank you for choosing to be part of the solution. Together, we are building a safer Nigeria for our children, our parents, and our communities.
+                </p>
+
+                <p style="margin: 0; line-height: 1.5;">
+                  With deep respect and gratitude,<br />
+                  <strong style="color: #0B2215; font-size: 16px;">The Sensoo Team</strong><br />
+                  <span style="font-size: 13px; color: #64748B;">Protecting Lives. Safeguarding Nigeria.</span>
+                </p>
+              </div>
+
+            </td>
+          </tr>
+
+          <!-- Footer Banner -->
+          <tr>
+            <td style="padding: 0; margin: 0; line-height: 0;">
+              <img src="https://raw.githubusercontent.com/mavlon00/sensoo-app-final/main/assets/email/footer.png" alt="Sensoo - Trusted Products. Healthier People." width="580" style="display: block; border: 0; width: 100%; max-width: 580px; height: auto; outline: none; border-radius: 0 0 20px 20px;" />
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>"""
+
+
 async def send_otp_via_resend(
     to_email: str,
     otp_code: str,
@@ -248,12 +371,14 @@ async def send_otp_via_resend(
         logger.warning(f"Resend API key or destination email missing: key_present={bool(key)}, email={to_email}")
         return False
 
-    html_content = generate_otp_email_html(otp_code, user_name, to_email=to_email)
+    clean_code = str(otp_code).strip()
+    html_content = generate_otp_email_html(clean_code, user_name, to_email=to_email)
 
     payload = {
         "from": sender,
         "to": [to_email.strip()],
-        "subject": "Your Sensoo verification code",
+        # Continuous OTP in subject line enables Gmail native Copy-Code Action Chip
+        "subject": f"{clean_code} is your Sensoo verification code",
         "html": html_content,
     }
 
@@ -270,7 +395,7 @@ async def send_otp_via_resend(
             )
 
             if response.status_code in [200, 201]:
-                logger.info(f"Successfully dispatched OTP {otp_code} to {to_email} via Resend")
+                logger.info(f"Successfully dispatched OTP {clean_code} to {to_email} via Resend")
                 return True
             else:
                 logger.error(
@@ -279,4 +404,70 @@ async def send_otp_via_resend(
                 return False
     except Exception as exc:
         logger.error(f"Failed to deliver OTP via Resend to {to_email}: {exc}")
+        return False
+
+
+async def send_welcome_letter_via_resend(
+    to_email: str,
+    user_name: Optional[str] = None,
+    api_key: Optional[str] = None,
+    from_email: Optional[str] = None,
+) -> bool:
+    """Dispatches the official Sensoo welcome letter to a registered member."""
+    from app.settings import settings
+
+    key = (
+        api_key
+        or getattr(settings, "RESEND_API_KEY", "")
+        or os.getenv("RESEND_API_KEY", "")
+        or os.getenv("EXPO_PUBLIC_RESEND_API_KEY", "")
+    )
+    if key:
+        key = key.strip().strip('"').strip("'")
+
+    sender = (
+        from_email
+        or getattr(settings, "RESEND_FROM_EMAIL", "")
+        or os.getenv("RESEND_FROM_EMAIL", "")
+        or os.getenv("EXPO_PUBLIC_RESEND_FROM", "")
+        or "Sensoo Security <verify@inboxsync.co.uk>"
+    )
+    if sender:
+        sender = sender.strip().strip('"').strip("'")
+
+    if not key or not to_email:
+        logger.warning(f"Resend API key or destination email missing: key_present={bool(key)}, email={to_email}")
+        return False
+
+    html_content = generate_welcome_letter_html(user_name, to_email=to_email)
+
+    payload = {
+        "from": sender,
+        "to": [to_email.strip()],
+        "subject": "Welcome to Sensoo — Thank you for standing up for Nigeria 🇳🇬",
+        "html": html_content,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Sensoo-App/1.0",
+                },
+                json=payload,
+            )
+
+            if response.status_code in [200, 201]:
+                logger.info(f"Successfully dispatched Welcome Letter to {to_email} via Resend")
+                return True
+            else:
+                logger.error(
+                    f"Resend API responded with {response.status_code}: {response.text}"
+                )
+                return False
+    except Exception as exc:
+        logger.error(f"Failed to deliver Welcome Letter via Resend to {to_email}: {exc}")
         return False
