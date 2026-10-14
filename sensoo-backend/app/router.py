@@ -248,6 +248,39 @@ def health_check() -> Any:
     return {"status": "healthy", "service": "sensoo-backend"}
 
 
+@router.get("/email-status")
+def email_status_check() -> Any:
+    import os
+    from app.settings import settings
+
+    key = (
+        getattr(settings, "RESEND_API_KEY", "")
+        or os.getenv("RESEND_API_KEY", "")
+        or os.getenv("EXPO_PUBLIC_RESEND_API_KEY", "")
+    )
+    if key:
+        key = key.strip().strip('"').strip("'")
+
+    sender = (
+        getattr(settings, "RESEND_FROM_EMAIL", "")
+        or os.getenv("RESEND_FROM_EMAIL", "")
+        or os.getenv("EXPO_PUBLIC_RESEND_FROM", "")
+        or "Sensoo Security <verify@inboxsync.co.uk>"
+    )
+    if sender:
+        sender = sender.strip().strip('"').strip("'")
+
+    detected_vars = [k for k in ["RESEND_API_KEY", "EXPO_PUBLIC_RESEND_API_KEY"] if os.getenv(k)]
+
+    return {
+        "status": "ok",
+        "resend_key_configured": bool(key),
+        "resend_key_length": len(key) if key else 0,
+        "sender": sender,
+        "detected_vars": detected_vars,
+    }
+
+
 def validate_gs1_checksum(barcode: str) -> bool:
     digits = [int(c) for c in barcode if c.isdigit()]
     if len(digits) not in [8, 12, 13, 14]:

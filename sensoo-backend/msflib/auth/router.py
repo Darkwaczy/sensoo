@@ -240,19 +240,22 @@ def router(
             keystore.set(f"otp:{req.email.strip()}", otp_code)
 
         # Dispatch branded Sensoo verification OTP email via Resend
+        email_sent = False
         try:
             from app.email_service import send_otp_via_resend
-            await send_otp_via_resend(
+            email_sent = await send_otp_via_resend(
                 to_email=req.email.strip(),
                 otp_code=otp_code,
                 user_name=getattr(account, "full_name", None) if account else None,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("sensoo.auth").error(f"Error dispatching password recovery OTP: {exc}")
 
         return {
             "ok": True,
             "message": "Verification code has been sent to your email",
+            "email_dispatched": email_sent,
             "expires_in": 600,
         }
 

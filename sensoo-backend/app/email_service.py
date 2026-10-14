@@ -224,12 +224,27 @@ async def send_otp_via_resend(
     """Dispatches a branded Sensoo verification OTP email using Resend API."""
     from app.settings import settings
 
-    import os
-    key = api_key or getattr(settings, "RESEND_API_KEY", "") or os.getenv("RESEND_API_KEY", "")
-    sender = from_email or getattr(settings, "RESEND_FROM_EMAIL", "Sensoo <verify@inboxsync.co.uk>") or os.getenv("RESEND_FROM_EMAIL", "Sensoo <verify@inboxsync.co.uk>")
+    key = (
+        api_key
+        or getattr(settings, "RESEND_API_KEY", "")
+        or os.getenv("RESEND_API_KEY", "")
+        or os.getenv("EXPO_PUBLIC_RESEND_API_KEY", "")
+    )
+    if key:
+        key = key.strip().strip('"').strip("'")
+
+    sender = (
+        from_email
+        or getattr(settings, "RESEND_FROM_EMAIL", "")
+        or os.getenv("RESEND_FROM_EMAIL", "")
+        or os.getenv("EXPO_PUBLIC_RESEND_FROM", "")
+        or "Sensoo Security <verify@inboxsync.co.uk>"
+    )
+    if sender:
+        sender = sender.strip().strip('"').strip("'")
 
     if not key or not to_email:
-        logger.warning(f"Resend API key or destination email missing: key={bool(key)}, email={to_email}")
+        logger.warning(f"Resend API key or destination email missing: key_present={bool(key)}, email={to_email}")
         return False
 
     html_content = generate_otp_email_html(otp_code, user_name, to_email=to_email)
