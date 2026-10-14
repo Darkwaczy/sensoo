@@ -103,19 +103,15 @@ def router(
             pass
 
         try:
-            from app.email_service import send_otp_via_resend, send_welcome_letter_via_resend
+            from app.email_service import send_otp_via_resend
             await send_otp_via_resend(
                 to_email=account.email,
                 otp_code=reg_otp,
                 user_name=account.full_name,
             )
-            await send_welcome_letter_via_resend(
-                to_email=account.email,
-                user_name=account.full_name,
-            )
         except Exception as exc:
             import logging
-            logging.getLogger("sensoo.auth").error(f"Failed to dispatch registration emails: {exc}")
+            logging.getLogger("sensoo.auth").error(f"Failed to dispatch registration OTP email: {exc}")
 
         # Issue access token
         secret_key = get_secret_key()
@@ -271,6 +267,7 @@ def router(
     @auth_rt.post("/verify-token")
     async def verify_token(
         req: VerifyTokenRequest,
+        session: Session = Depends(get_session),
         keystore: Any = Depends(get_keystore),
     ) -> Any:
         email = req.email.strip()
@@ -278,6 +275,23 @@ def router(
 
         saved_code = keystore.get(f"otp:{email}") if (keystore and hasattr(keystore, "get")) else None
         if saved_code and str(saved_code) == code:
+            # Delete verified OTP from keystore
+            try:
+                if keystore and hasattr(keystore, "delete"):
+                    keystore.delete(f"otp:{email}")
+            except Exception:
+                pass
+
+            # Dispatch the official Welcome Letter now that the OTP is successfully verified!
+            try:
+                from app.email_service import send_welcome_letter_via_resend
+                account = session.exec(select(account_type).where(account_type.email == email)).first() if session else None
+                user_name = account.full_name if account else None
+                await send_welcome_letter_via_resend(to_email=email, user_name=user_name)
+            except Exception as exc:
+                import logging
+                logging.getLogger("sensoo.auth").error(f"Failed to dispatch welcome letter upon verification: {exc}")
+
             return {"valid": True, "email": email, "token": code}
 
         raise HTTPException(

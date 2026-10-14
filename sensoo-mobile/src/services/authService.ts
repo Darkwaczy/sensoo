@@ -599,11 +599,11 @@ export async function registerUser(params: {
     password: pass,
   });
 
-  // Dispatch directly via Resend to guarantee instant delivery even if backend email queue is blocked
-  await sendResendEmailDirect(cleanEmail, localOtp, cleanName);
-  // Send the official welcome letter thanking user for standing up for Nigeria
-  sendWelcomeLetterDirect(cleanEmail, cleanName).catch(() => {});
-  currentAuth.pendingOtpCode = localOtp;
+  // Only dispatch directly via Resend if backend registration was unreachable, preventing duplicate OTP emails
+  if (!backendSuccess) {
+    await sendResendEmailDirect(cleanEmail, localOtp, cleanName);
+    currentAuth.pendingOtpCode = localOtp;
+  }
 
   currentAuth.pendingOtpDestination = destination;
   currentAuth.pendingUser = {
@@ -878,6 +878,7 @@ export async function verifyOtpCode(
   };
 
   let isVerified = false;
+  let backendVerified = false;
 
   try {
     const verRes = await fetch(`${SENSOO_API_BASE_URL}/auth/verify-token`, {
@@ -891,6 +892,7 @@ export async function verifyOtpCode(
 
     if (verRes.ok) {
       isVerified = true;
+      backendVerified = true;
     }
   } catch {}
 
@@ -916,6 +918,11 @@ export async function verifyOtpCode(
     role: (pUser.role as any) || 'consumer',
     createdAt: pUser.createdAt || new Date().toISOString(),
   };
+
+  // If backend was offline and verified locally, dispatch the welcome letter from client
+  if (!backendVerified) {
+    sendWelcomeLetterDirect(email, newUser.fullName).catch(() => {});
+  }
 
   currentAuth.user = newUser;
   currentAuth.isAuthenticated = true;
