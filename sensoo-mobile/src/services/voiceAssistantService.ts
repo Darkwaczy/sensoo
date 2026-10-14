@@ -321,7 +321,7 @@ export const transcribeAudioWithGroq = async (audioUri: string): Promise<string>
 
   if (!apiKey || !audioUri) {
     console.warn('[VoiceAssistant] Missing Groq API key or audio URI, skipping cloud transcription');
-    return '';
+    throw new Error('Groq API key or audio URI missing');
   }
 
   try {
@@ -332,6 +332,7 @@ export const transcribeAudioWithGroq = async (audioUri: string): Promise<string>
         httpMethod: 'POST',
         uploadType: FileSystem.FileSystemUploadType.MULTIPART,
         fieldName: 'file',
+        mimeType: 'audio/m4a',
         parameters: {
           model: 'whisper-large-v3-turbo',
           language: 'en',
@@ -345,14 +346,14 @@ export const transcribeAudioWithGroq = async (audioUri: string): Promise<string>
 
     if (uploadResult.status < 200 || uploadResult.status >= 300) {
       console.warn(`[VoiceAssistant] Groq transcription failed [${uploadResult.status}]:`, uploadResult.body);
-      return '';
+      throw new Error(`Groq HTTP ${uploadResult.status}: ${uploadResult.body}`);
     }
 
     const data = JSON.parse(uploadResult.body);
     return data?.text || '';
   } catch (err) {
     console.warn('[VoiceAssistant] Groq Whisper network error:', err);
-    return '';
+    throw err;
   }
 };
 

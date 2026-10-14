@@ -567,12 +567,13 @@ export default function HomeScreen() {
               setVoiceNotice((prev) => (prev === 'No speech detected' ? null : prev));
             }, 2000);
           }
-        } catch (err) {
+        } catch (err: any) {
           console.warn('[VoiceAssistant] Groq Whisper transcription error:', err);
-          setVoiceNotice('Could not process audio');
+          const errMsg = err?.message?.includes('missing') ? 'Voice key missing' : 'Could not process audio';
+          setVoiceNotice(errMsg);
           setTimeout(() => {
-            setVoiceNotice((prev) => (prev === 'Could not process audio' ? null : prev));
-          }, 2000);
+            setVoiceNotice((prev) => (prev === errMsg ? null : prev));
+          }, 2500);
         } finally {
           isTranscribingRef.current = false;
         }
