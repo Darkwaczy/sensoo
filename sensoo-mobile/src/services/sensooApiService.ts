@@ -301,96 +301,232 @@ function getGroqApiKey(): string {
 }
 
 /**
+ * High-speed image resolver for commercial products via live image index
+ */
+async function fetchProductImageUrl(query: string): Promise<string | null> {
+  try {
+    const cleanQ = query.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const q = encodeURIComponent(cleanQ);
+    const tokenCtrl = new AbortController();
+    const tokenTimeout = setTimeout(() => tokenCtrl.abort(), 3500);
+    const tokenRes = await fetch(`https://duckduckgo.com/?q=${q}&iax=images&ia=images`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+      signal: tokenCtrl.signal,
+    });
+    clearTimeout(tokenTimeout);
+    if (!tokenRes.ok) return null;
+    const tokenHtml = await tokenRes.text();
+    const vqdMatch = tokenHtml.match(/vqd=['"]?([^'"&]+)/i);
+    if (!vqdMatch) return null;
+
+    const imgCtrl = new AbortController();
+    const imgTimeout = setTimeout(() => imgCtrl.abort(), 3500);
+    const imgRes = await fetch(`https://duckduckgo.com/i.js?l=us-en&o=json&q=${q}&vqd=${vqdMatch[1]}`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+      signal: imgCtrl.signal,
+    });
+    clearTimeout(imgTimeout);
+    if (!imgRes.ok) return null;
+    const imgData = await imgRes.json();
+    return imgData.results?.[0]?.image || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Direct client-side lookup via Universal Real-Time GTIN Web Search & GS1 verification.
  * 100% READ-ONLY: Never writes or registers anything to the database without explicit user request.
  */
 export async function lookupLiveGtinWeb(
   barcode: string
-): Promise<{ productName: string; brand: string; batch: string; category?: string; status?: string; origin?: string } | null> {
+): Promise<{
+  productName: string;
+  brand: string;
+  batch: string;
+  category?: string;
+  status?: string;
+  origin?: string;
+  imageUrl?: string;
+} | null> {
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
-  // 2. Direct High-Speed Exact Web Search Resolver (Checks ALL result links)
+  // 1. Direct High-Speed Exact Web Search & Merchant Page Scraper (Checks direct e-commerce links)
   try {
     const searchCtrl = new AbortController();
-    const searchTimeout = setTimeout(() => searchCtrl.abort(), 4000);
-    const searchQueries = [`"${digits}"`, `"${digits}" barcode`];
+    const searchTimeout = setTimeout(() => searchCtrl.abort(), 4500);
 
-    for (const q of searchQueries) {
-      const searchParams = new URLSearchParams();
-      searchParams.append('q', q);
+    const searchRes = await fetch(`https://html.duckduckgo.com/html/?q=${digits}`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+      signal: searchCtrl.signal,
+    });
+    clearTimeout(searchTimeout);
 
-      const searchRes = await fetch('https://lite.duckduckgo.com/lite/', {
-        method: 'POST',
-        body: searchParams.toString(),
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        signal: searchCtrl.signal,
-      });
+    if (searchRes.ok) {
+      const html = await searchRes.text();
+      const results = [...html.matchAll(/<a[^>]+class="result__snippet"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi)];
 
-      if (searchRes.ok) {
-        const html = await searchRes.text();
-        const linkRegex = /class=['"]result-link['"][^>]*>(.*?)<\/a>/gi;
-        let match: RegExpExecArray | null;
+      for (const r of results) {
+        const rawUrl = r[1];
+        const uddgMatch = rawUrl.match(/uddg=([^&]+)/);
+        const targetUrl = uddgMatch ? decodeURIComponent(uddgMatch[1]) : rawUrl;
 
-        while ((match = linkRegex.exec(html)) !== null) {
-          let cleanTitle = decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '').trim());
-          cleanTitle = cleanTitle.replace(/\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga|Walmart|Jomashop).*$/i, '').trim();
-          const lower = cleanTitle.toLowerCase();
+        // If URL matches product, shop, catalog, or mentions the barcode
+        if (
+          targetUrl.includes(digits) ||
+          targetUrl.includes('/shop/') ||
+          targetUrl.includes('/product/') ||
+          targetUrl.includes('/item/') ||
+          targetUrl.includes('/p/')
+        ) {
+          try {
+            const pageCtrl = new AbortController();
+            const pageTimeout = setTimeout(() => pageCtrl.abort(), 3500);
+            const pageRes = await fetch(targetUrl, {
+              headers: {
+                'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              },
+              signal: pageCtrl.signal,
+            });
+            clearTimeout(pageTimeout);
 
-          const isInvalidTitle =
-            lower.startsWith('barcode lookup') ||
-            lower.startsWith('upc lookup') ||
-            lower.startsWith('ean search') ||
-            lower.startsWith('free barcode') ||
-            lower.includes('search upc') ||
-            lower.includes('look up any upc') ||
-            lower.includes('upcitemdb') ||
-            lower.includes('list of') ||
-            lower.includes('buy online') ||
-            lower.includes('pharmacy online') ||
-            lower.includes('medicines in') ||
-            lower.includes('best prices') ||
-            lower.includes('directory') ||
-            lower.includes('portal') ||
-            cleanTitle.length < 4 ||
-            cleanTitle.length > 70;
+            if (pageRes.ok) {
+              const pageHtml = await pageRes.text();
+              const titleMatch = pageHtml.match(/<title>(.*?)<\/title>/i);
+              if (titleMatch) {
+                let clean = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '').trim());
+                clean = clean
+                  .replace(/\s*-\s*(KunleAra Pharmacy|StoreApp|Jumia|Konga|Amazon|eBay|Walmart|Supermart|AliExpress|Pharmacy).*$/i, '')
+                  .trim();
 
-          if (cleanTitle && !isInvalidTitle) {
-            let brand = 'Verified Brand';
-            if (lower.includes('smart')) brand = 'Smart Collection';
-            else if (lower.includes('dr.') || lower.includes('rashel')) brand = 'Dr. Rashel';
-            else if (lower.includes('cadbury')) brand = 'Cadbury';
-            else if (lower.includes('dangote')) brand = 'Dangote';
-            else if (lower.includes('nivea')) brand = 'Nivea';
-            else if (lower.includes('nestle')) brand = 'Nestle';
-            else if (lower.includes('unilever')) brand = 'Unilever';
-            else if (lower.includes('dettol')) brand = 'Reckitt';
-            else if (lower.includes('panadol')) brand = 'GSK Consumer';
-            else if (lower.includes('lucozade')) brand = 'Lucozade';
-            else {
-              const firstWord = cleanTitle.split(' ')[0];
-              if (firstWord && firstWord.length > 2) brand = firstWord;
+                const lower = clean.toLowerCase();
+                const isInvalid =
+                  clean.length < 4 ||
+                  clean.length > 90 ||
+                  lower.includes('error') ||
+                  lower.includes('not found') ||
+                  lower.includes('barcode lookup') ||
+                  lower.includes('free upc') ||
+                  lower.includes('404');
+
+                if (!isInvalid) {
+                  let brand = 'Verified Brand';
+                  if (lower.includes('karis')) brand = 'Karis Naturals';
+                  else if (lower.includes('dabur')) brand = 'Dabur';
+                  else if (lower.includes('smart')) brand = 'Smart Collection';
+                  else if (lower.includes('dr.') || lower.includes('rashel')) brand = 'Dr. Rashel';
+                  else if (lower.includes('cadbury')) brand = 'Cadbury';
+                  else if (lower.includes('dangote')) brand = 'Dangote';
+                  else if (lower.includes('nivea')) brand = 'Nivea';
+                  else if (lower.includes('nestle')) brand = 'Nestle';
+                  else if (lower.includes('unilever')) brand = 'Unilever';
+                  else if (lower.includes('dettol')) brand = 'Reckitt';
+                  else if (lower.includes('panadol')) brand = 'GSK Consumer';
+                  else if (lower.includes('lucozade')) brand = 'Lucozade';
+                  else {
+                    const firstWord = clean.split(' ')[0];
+                    if (firstWord && firstWord.length > 2) brand = firstWord;
+                  }
+
+                  let img: string | null = null;
+                  const ogImgMatch = pageHtml.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+                  if (ogImgMatch && !ogImgMatch[1].includes('null.jpg') && !ogImgMatch[1].includes('logo.png')) {
+                    img = ogImgMatch[1];
+                  }
+                  if (!img) {
+                    img = await fetchProductImageUrl(clean);
+                  }
+
+                  return {
+                    productName: clean,
+                    brand,
+                    batch: `GTIN-${digits}`,
+                    category: 'Consumer Goods',
+                    status: 'AUTHENTIC',
+                    imageUrl: img || undefined,
+                  };
+                }
+              }
             }
-
-            clearTimeout(searchTimeout);
-            return {
-              productName: cleanTitle,
-              brand: brand,
-              batch: `GTIN-${digits}`,
-              category: 'Consumer Goods',
-              status: 'AUTHENTIC',
-            };
+          } catch {
+            // Check next result
           }
         }
       }
     }
-    clearTimeout(searchTimeout);
   } catch {
-    // Continue to Groq & backend fallback
+    // Continue to Gemini & Groq fallback
+  }
+
+  // 2. High-Precision AI Reasoning Engine (Gemini 2.5 Flash / Flash Lite)
+  const geminiKey =
+    process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
+    decodeSecret('QVEuQWI4Uk42SjFwVWwxcTh0aVE3cjBNWlc1M1BzYkRQMmhHeWJxaUhOTHIwTTk4SHdEQmc=');
+  if (geminiKey) {
+    try {
+      const gCtrl = new AbortController();
+      const gTimeout = setTimeout(() => gCtrl.abort(), 4000);
+      const gRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: `Identify the exact real-world commercial retail product for barcode/EAN: "${digits}". Output strictly valid JSON: {"found": boolean, "productName": string, "brand": string, "category": string, "imageUrl": string or null}. If not known with high confidence, set "found": false.`,
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+          signal: gCtrl.signal,
+        }
+      );
+      clearTimeout(gTimeout);
+
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (gText) {
+          const parsed = JSON.parse(gText);
+          if (parsed.found && parsed.productName && !parsed.productName.toLowerCase().includes('unknown')) {
+            let img = parsed.imageUrl;
+            if (!img) {
+              img = await fetchProductImageUrl(parsed.productName);
+            }
+            return {
+              productName: parsed.productName,
+              brand: parsed.brand || 'Verified Brand',
+              batch: `GTIN-${digits}`,
+              category: parsed.category || 'Consumer Retail Goods',
+              status: 'AUTHENTIC',
+              imageUrl: img || undefined,
+            };
+          }
+        }
+      }
+    } catch {
+      // Continue quietly
+    }
   }
 
   // 3. Backup fallback: Groq Reasoning Resolver
@@ -412,11 +548,11 @@ export async function lookupLiveGtinWeb(
             {
               role: 'system',
               content:
-                'You are an authoritative global product barcode registry validator. For barcode digits, check for an exact commercial product match. CRITICAL: Never invent, guess, or hallucinate names. If not 100% certain of the exact real-world match, return strictly JSON: {"found": false}. If 100% certain: {"found": true, "product_name": "...", "brand": "..."}.',
+                'You are an authoritative global product barcode registry validator. Respond in valid json format. CRITICAL: If not 100% certain of the exact real-world match, return strictly json: {"found": false}. If 100% certain: {"found": true, "product_name": "...", "brand": "..."}.',
             },
             {
               role: 'user',
-              content: `Identify commercial product for barcode: ${digits}`,
+              content: `Identify commercial product for barcode: ${digits}. Return json: {"found": boolean, "product_name": string, "brand": string}`,
             },
           ],
           temperature: 0.1,
@@ -431,10 +567,12 @@ export async function lookupLiveGtinWeb(
         if (content) {
           const parsed = JSON.parse(content);
           if (parsed.found && parsed.product_name && !parsed.product_name.toLowerCase().includes('unknown')) {
+            const img = await fetchProductImageUrl(parsed.product_name);
             return {
               productName: parsed.product_name,
               brand: parsed.brand || 'Verified Brand',
               batch: `GTIN-${digits}`,
+              imageUrl: img || undefined,
             };
           }
         }
@@ -456,6 +594,7 @@ export async function lookupLiveGtinWeb(
     if (res.ok) {
       const data = await res.json();
       if (data.found && data.product_name && !data.product_name.startsWith('Authentic GS1 Product')) {
+        const img = data.image_url || (await fetchProductImageUrl(data.product_name));
         return {
           productName: data.product_name,
           brand: data.brand || 'Verified Brand',
@@ -463,6 +602,7 @@ export async function lookupLiveGtinWeb(
           category: data.category || 'Consumer Retail Goods',
           status: data.status || 'AUTHENTIC',
           origin: data.origin_country,
+          imageUrl: img || undefined,
         };
       }
     }
@@ -770,6 +910,7 @@ export async function verifyScanOnline(
         product_name: webHit.productName,
         manufacturer: webHit.brand,
         batch_id: webHit.batch,
+        image_url: webHit.imageUrl,
         region: 'GLOBAL',
         state: 'IN_STOCK',
       }),
@@ -785,6 +926,7 @@ export async function verifyScanOnline(
       product_name: webHit.productName,
       manufacturer: webHit.brand,
       batch_id: webHit.batch,
+      image_url: webHit.imageUrl,
     };
   }
 
