@@ -632,8 +632,8 @@ export default function HomeScreen() {
     const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
     const shouldSpeak = Boolean(voiceSettings.voiceReplyEnabled);
 
-    // If user said "Hey Sensoo", greeting, or wake word: reply immediately with voice
-    if (parsed.intent === 'GREETING' || parsed.hasWakeWord) {
+    // If user said ONLY "Hey Sensoo" or a greeting without an action: reply with greeting
+    if (parsed.intent === 'GREETING') {
       const greetingText = `Hello, ${userName}! How can I help you today?`;
       setVoiceNotice(greetingText);
       if (shouldSpeak) {
@@ -686,10 +686,15 @@ export default function HomeScreen() {
       router.push('/location-region' as any);
     } else if (parsed.intent === 'ABOUT') {
       router.push('/about-sensoo' as any);
-    } else if (parsed.intent === 'GUIDANCE') {
+    } else if (parsed.intent === 'GUIDANCE' || cmd.trim().split(' ').length >= 2) {
+      // If user asked an open question or guidance, forward directly to the AI agent
+      setVoiceNotice('Asking Sensoo AI...');
+      if (shouldSpeak) {
+        speakWithCartesia('Consulting Sensoo AI');
+      }
       router.push({ pathname: '/agent', params: { query: cmd } });
     } else {
-      // Natural reply without exposing or writing out the raw transcribed words
+      // Short unclassified speech fallback
       const fallbackText = `How can I help you today, ${userName}? You can ask to scan a product, find nearby clinics, or check safety precautions.`;
       setVoiceNotice(fallbackText);
       if (shouldSpeak) {
