@@ -28,297 +28,14 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 /**
- * Accredited Nigerian Health Facilities Registry
- * Comprehensive registry of verified public hospitals, cottage centers,
- * and tertiary trauma teaching hospitals across Nigerian geopolitical zones.
+ * Maximum acceptable radius (in kilometers) for a local emergency clinic.
+ * Enforces strictly local results and rejects cross-continental or distant matches.
  */
-const ACCREDITED_NIGERIAN_FACILITIES: Array<Omit<ClinicData, 'distance' | 'distanceKm'>> = [
-  // --- Akwa Ibom State (Eket, Uyo, Ikot Ekpene, Oron) ---
-  {
-    id: 'ng-eket-cottage',
-    name: 'Eket Cottage Hospital & Trauma Centre',
-    address: 'Marina Road / Iquita, Eket, Akwa Ibom',
-    phone: '112 / +234 802 331 4455',
-    status: 'Emergency First Response Unit (24/7)',
-    lat: 4.6390,
-    lng: 7.9350,
-  },
-  {
-    id: 'ng-eket-immanuel',
-    name: 'Immanuel General Hospital Eket',
-    address: 'Hospital Road, Off Grace Bill Rd, Eket, Akwa Ibom',
-    phone: '112 / +234 803 720 0112',
-    status: 'Accredited General Hospital (Emergency 24/7)',
-    lat: 4.6468,
-    lng: 7.9284,
-  },
-  {
-    id: 'ng-eket-qic',
-    name: 'Qua Iboe Church Leprosy & General Hospital',
-    address: 'Ekpene Obom, Etinan (Near Eket Axis), Akwa Ibom',
-    phone: '112 / +234 803 540 2211',
-    status: 'Mission Referral Hospital',
-    lat: 4.7920,
-    lng: 7.8540,
-  },
-  {
-    id: 'ng-oron-gen',
-    name: 'General Hospital Oron',
-    address: 'Hospital Road, Oron, Akwa Ibom',
-    phone: '112 / +234 802 991 0022',
-    status: 'Public General Hospital (24/7)',
-    lat: 4.8210,
-    lng: 8.2310,
-  },
-  {
-    id: 'ng-uyo-ibom-spec',
-    name: 'Ibom Specialist Hospital',
-    address: 'Ewet Housing Estate Bypass, Uyo, Akwa Ibom',
-    phone: '+234 818 000 0112',
-    status: 'Tertiary Referral & Trauma Care (24/7)',
-    lat: 5.0210,
-    lng: 7.9420,
-  },
-  {
-    id: 'ng-uyo-uuth',
-    name: 'University of Uyo Teaching Hospital (UUTH)',
-    address: 'Abak Road, Uyo, Akwa Ibom',
-    phone: '112 / +234 85 240 011',
-    status: 'Federal Teaching Hospital & Poison Centre',
-    lat: 5.0377,
-    lng: 7.9128,
-  },
-  {
-    id: 'ng-ikot-ekpene-gen',
-    name: 'General Hospital Ikot Ekpene',
-    address: 'Aba Road, Ikot Ekpene, Akwa Ibom',
-    phone: '112 / +234 803 111 2233',
-    status: 'Public General Hospital (24/7)',
-    lat: 5.1812,
-    lng: 7.7145,
-  },
-
-  // --- Rivers State (Port Harcourt, Obio-Akpor) ---
-  {
-    id: 'ng-ph-upth',
-    name: 'University of Port Harcourt Teaching Hospital (UPTH)',
-    address: 'East-West Road, Port Harcourt, Rivers State',
-    phone: '112 / +234 84 817 999',
-    status: 'Federal Teaching Hospital (24/7 Emergency)',
-    lat: 4.9015,
-    lng: 6.9248,
-  },
-  {
-    id: 'ng-ph-rsuth',
-    name: 'Rivers State University Teaching Hospital (RSUTH)',
-    address: 'Harley Street, Old GRA, Port Harcourt, Rivers',
-    phone: '112 / +234 84 233 445',
-    status: 'State Teaching Hospital & Trauma Centre',
-    lat: 4.7785,
-    lng: 7.0092,
-  },
-  {
-    id: 'ng-ph-bmsh',
-    name: 'Braithwaite Memorial Specialist Hospital',
-    address: 'Hospital Road, Old GRA, Port Harcourt',
-    phone: '112 / +234 803 300 1199',
-    status: 'Specialist Trauma & Critical Care',
-    lat: 4.7790,
-    lng: 7.0080,
-  },
-
-  // --- Cross River State (Calabar) ---
-  {
-    id: 'ng-calabar-ucth',
-    name: 'University of Calabar Teaching Hospital (UCTH)',
-    address: 'Murtala Mohammed Highway / Moore Rd, Calabar',
-    phone: '112 / +234 87 232 445',
-    status: 'Federal Teaching Hospital (24/7)',
-    lat: 4.9757,
-    lng: 8.3417,
-  },
-  {
-    id: 'ng-calabar-gen',
-    name: 'General Hospital Calabar',
-    address: 'Mary Slessor Avenue, Calabar, Cross River',
-    phone: '112 / +234 803 888 7722',
-    status: 'Accredited General Hospital',
-    lat: 4.9600,
-    lng: 8.3280,
-  },
-
-  // --- Lagos State (Ikeja, Lagos Island, Surulere) ---
-  {
-    id: 'ng-lagos-luth',
-    name: 'Lagos University Teaching Hospital (LUTH)',
-    address: 'Ishaga Road, Idi-Araba, Surulere, Lagos',
-    phone: '112 / +234 1 877 7845',
-    status: 'Tertiary Teaching Hospital (24/7 Emergency)',
-    lat: 6.5186,
-    lng: 3.3551,
-  },
-  {
-    id: 'ng-lagos-lasuth',
-    name: 'Lagos State University Teaching Hospital (LASUTH)',
-    address: '1-5 Oba Akinjobi Way, Ikeja, Lagos',
-    phone: '112 / +234 1 497 3480',
-    status: 'State Teaching Hospital & Emergency Trauma',
-    lat: 6.5925,
-    lng: 3.3429,
-  },
-  {
-    id: 'ng-lagos-gen-island',
-    name: 'General Hospital Lagos Island',
-    address: 'Broad Street, Marina, Lagos Island',
-    phone: '112 / +234 1 263 2145',
-    status: 'Public General Hospital (24/7)',
-    lat: 6.4520,
-    lng: 3.3930,
-  },
-  {
-    id: 'ng-lagos-fmc-ebute',
-    name: 'Federal Medical Centre Ebute Metta',
-    address: 'Railway Compound, Ebute Metta, Lagos',
-    phone: '112 / +234 1 774 2130',
-    status: 'Federal Medical Centre (24/7 Emergency)',
-    lat: 6.4830,
-    lng: 3.3820,
-  },
-
-  // --- Abuja FCT ---
-  {
-    id: 'ng-fct-national',
-    name: 'National Hospital Abuja',
-    address: 'Plot 132 Central Business District, Abuja FCT',
-    phone: '112 / +234 9 234 1450',
-    status: 'Apex Federal Tertiary Hospital (24/7)',
-    lat: 9.0435,
-    lng: 7.4612,
-  },
-  {
-    id: 'ng-fct-uath',
-    name: 'University of Abuja Teaching Hospital (UATH)',
-    address: 'Main Road, Gwagwalada, Abuja FCT',
-    phone: '112 / +234 9 882 1200',
-    status: 'Federal Teaching Hospital & Poison Centre',
-    lat: 8.9431,
-    lng: 7.0850,
-  },
-  {
-    id: 'ng-fct-maitama',
-    name: 'Maitama District Hospital',
-    address: 'Aguiyi Ironsi Street, Maitama, Abuja FCT',
-    phone: '112 / +234 9 413 5400',
-    status: 'District Emergency Center (24/7)',
-    lat: 9.0833,
-    lng: 7.4912,
-  },
-  {
-    id: 'ng-fct-wuse',
-    name: 'Wuse District Hospital',
-    address: 'Conakry Street, Wuse Zone 3, Abuja FCT',
-    phone: '112 / +234 9 523 0089',
-    status: 'District General Hospital (24/7)',
-    lat: 9.0620,
-    lng: 7.4650,
-  },
-
-  // --- Anambra State (Onitsha, Nnewi, Awka) ---
-  {
-    id: 'ng-anambra-onitsha-gen',
-    name: 'General Hospital Onitsha',
-    address: 'Old Market Road, Onitsha, Anambra',
-    phone: '112 / +234 803 444 1122',
-    status: 'Accredited General Hospital (24/7)',
-    lat: 6.1520,
-    lng: 6.7820,
-  },
-  {
-    id: 'ng-anambra-nauth',
-    name: 'Nnamdi Azikiwe University Teaching Hospital (NAUTH)',
-    address: 'Old Nnewi-Owerri Road, Nnewi, Anambra',
-    phone: '112 / +234 46 460 220',
-    status: 'Federal Teaching Hospital (24/7)',
-    lat: 6.0190,
-    lng: 6.9140,
-  },
-
-  // --- Oyo State (Ibadan) ---
-  {
-    id: 'ng-ibadan-uch',
-    name: 'University College Hospital (UCH) Ibadan',
-    address: 'Queen Elizabeth II Road, Ibadan, Oyo State',
-    phone: '112 / +234 2 241 0088',
-    status: 'Premier Federal Teaching Hospital (24/7)',
-    lat: 7.4042,
-    lng: 3.9015,
-  },
-
-  // --- Kano State ---
-  {
-    id: 'ng-kano-akth',
-    name: 'Aminu Kano Teaching Hospital (AKTH)',
-    address: 'Zaria Road, Kano, Kano State',
-    phone: '112 / +234 64 669 000',
-    status: 'Federal Teaching Hospital & Trauma (24/7)',
-    lat: 11.9680,
-    lng: 8.5280,
-  },
-
-  // --- Enugu State ---
-  {
-    id: 'ng-enugu-unth',
-    name: 'University of Nigeria Teaching Hospital (UNTH)',
-    address: 'Ituku-Ozalla, Enugu State',
-    phone: '112 / +234 42 252 022',
-    status: 'Federal Teaching Hospital (24/7)',
-    lat: 6.2750,
-    lng: 7.5120,
-  },
-
-  // --- Edo State (Benin City) ---
-  {
-    id: 'ng-benin-ubth',
-    name: 'University of Benin Teaching Hospital (UBTH)',
-    address: 'Ugbowo-Lagos Road, Uselu, Benin City, Edo State',
-    phone: '112 / +234 52 600 443',
-    status: 'Federal Teaching Hospital (24/7 Emergency)',
-    lat: 6.3880,
-    lng: 5.6120,
-  },
-
-  // --- Delta State (Warri, Asaba) ---
-  {
-    id: 'ng-delta-warri-cent',
-    name: 'Central Hospital Warri',
-    address: 'Lower Erejuwa Road, Warri, Delta State',
-    phone: '112 / +234 803 222 9988',
-    status: 'State Central Hospital (24/7)',
-    lat: 5.5160,
-    lng: 5.7500,
-  },
-
-  // --- Kaduna State ---
-  {
-    id: 'ng-kaduna-abuth',
-    name: 'Ahmadu Bello University Teaching Hospital (ABUTH)',
-    address: 'Shika, Zaria / Kaduna Axis, Kaduna State',
-    phone: '112 / +234 69 550 550',
-    status: 'Federal Teaching Hospital (24/7)',
-    lat: 11.1350,
-    lng: 7.6400,
-  },
-];
+const MAX_SEARCH_RADIUS_KM = 50;
 
 /**
- * Maximum acceptable radius (in kilometers) for a local emergency clinic
- * Strictly prevents displaying European or cross-continental matches.
- */
-const MAX_SEARCH_RADIUS_KM = 60;
-
-/**
- * Get the user's real GPS coordinates from the device hardware.
- * Strictly uses device location without hardcoding any default city.
+ * Get the user's real GPS coordinates from device hardware.
+ * Strictly uses live device GPS location.
  */
 export async function getCurrentUserLocation(): Promise<{
   lat: number | null;
@@ -369,11 +86,9 @@ export async function getCurrentUserLocation(): Promise<{
 }
 
 /**
- * Query accredited healthcare facilities near the user's live GPS coordinates.
- * Hybrid intelligent engine:
- * 1. Checks accredited Nigerian public & emergency health registry sorted by real GPS distance.
- * 2. Cross-references live OpenStreetMap Overpass (within 25km radius).
- * 3. Strictly filters out any foreign or distant (> 60km) results.
+ * Query real healthcare facilities near the user's live GPS coordinates.
+ * 100% Dynamic Engine - Zero hardcoded clinics or hospital names.
+ * All results are resolved live from OpenStreetMap Overpass & Nominatim geo-spatial services.
  */
 export async function getNearbyClinics(userLat?: number, userLng?: number): Promise<ClinicData[]> {
   let lat = userLat;
@@ -382,30 +97,28 @@ export async function getNearbyClinics(userLat?: number, userLng?: number): Prom
   if (lat === undefined || lng === undefined || lat === null || lng === null) {
     const loc = await getCurrentUserLocation();
     if (loc.lat === null || loc.lng === null) {
-      // If GPS permission disabled, sort accredited Nigerian hospitals from southern hub
-      return ACCREDITED_NIGERIAN_FACILITIES.slice(0, 6).map((f) => ({
-        ...f,
-        distance: 'Nearby',
-        distanceKm: 0,
-      }));
+      return [];
     }
     lat = loc.lat;
     lng = loc.lng;
   }
 
   const liveFacilities: ClinicData[] = [];
-  const seenNames = new Set<string>();
+  const seenKeys = new Set<string>();
 
-  // 1. Query OpenStreetMap Overpass live API (Search radius: 25km, timeout: 6s)
+  // 1. Live OpenStreetMap Overpass Query (35km dynamic radius)
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    const overpassQuery = `[out:json][timeout:6];(node["amenity"="hospital"](around:25000,${lat},${lng});node["amenity"="clinic"](around:25000,${lat},${lng});node["healthcare"="hospital"](around:25000,${lat},${lng});node["healthcare"="centre"](around:25000,${lat},${lng}););out body 8;`;
-    
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    const overpassQuery = `[out:json][timeout:7];(node["amenity"~"hospital|clinic|doctors"](around:35000,${lat},${lng});way["amenity"~"hospital|clinic|doctors"](around:35000,${lat},${lng}););out center 12;`;
+
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
-      body: overpassQuery,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'SensooMobileApp/1.0 (info@sensoo.app)',
+      },
+      body: 'data=' + encodeURIComponent(overpassQuery),
       signal: ctrl.signal,
     });
     clearTimeout(timer);
@@ -416,13 +129,18 @@ export async function getNearbyClinics(userLat?: number, userLng?: number): Prom
         for (const el of data.elements) {
           const tags = el.tags || {};
           const name = tags.name || tags['name:en'] || tags.operator;
-          if (name && !seenNames.has(name.toLowerCase())) {
-            const dist = calculateDistanceKm(lat, lng, el.lat, el.lon);
-            // STRICT SAFETY: Discard any facility beyond 60km
-            if (dist <= MAX_SEARCH_RADIUS_KM) {
-              seenNames.add(name.toLowerCase());
+          const elLat = el.lat || el.center?.lat;
+          const elLon = el.lon || el.center?.lon;
+
+          if (name && elLat && elLon) {
+            const dist = calculateDistanceKm(lat, lng, elLat, elLon);
+            const key = name.trim().toLowerCase();
+
+            if (dist <= MAX_SEARCH_RADIUS_KM && !seenKeys.has(key)) {
+              seenKeys.add(key);
               const phone = tags.phone || tags['contact:phone'] || tags['emergency:phone'] || '112';
-              const street = [tags['addr:street'], tags['addr:city']].filter(Boolean).join(', ') || 'Medical Facility';
+              const street = [tags['addr:street'], tags['addr:city'], tags['addr:state']].filter(Boolean).join(', ') || 'Verified Health Facility';
+
               liveFacilities.push({
                 id: `osm-${el.id}`,
                 name,
@@ -431,8 +149,8 @@ export async function getNearbyClinics(userLat?: number, userLng?: number): Prom
                 status: tags.opening_hours === '24/7' ? 'Open 24 hours (Emergency)' : 'Accredited Medical Center',
                 phone,
                 address: street,
-                lat: el.lat,
-                lng: el.lon,
+                lat: elLat,
+                lng: elLon,
               });
             }
           }
@@ -440,32 +158,64 @@ export async function getNearbyClinics(userLat?: number, userLng?: number): Prom
       }
     }
   } catch (_err) {
-    // Continue seamlessly to accredited registry fallback
+    // Continue seamlessly to dynamic Nominatim fallback
   }
 
-  // 2. Supplement from accredited Nigerian registry sorted by true GPS distance
-  const registeredDistances = ACCREDITED_NIGERIAN_FACILITIES.map((facility) => {
-    const dist = calculateDistanceKm(lat as number, lng as number, facility.lat, facility.lng);
-    return {
-      ...facility,
-      distanceKm: dist,
-      distance: `${dist.toFixed(1)} km`,
-    };
-  }).sort((a, b) => a.distanceKm - b.distanceKm);
+  // 2. Secondary Live Nominatim Query with dynamic viewbox strictly bounded to Nigeria
+  if (liveFacilities.length < 3) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
 
-  // Add the closest registered facilities (within regional radius or top closest in Nigeria)
-  for (const reg of registeredDistances) {
-    const key = reg.name.toLowerCase();
-    if (!seenNames.has(key)) {
-      seenNames.add(key);
-      liveFacilities.push(reg);
-    }
-    if (liveFacilities.length >= 6) {
-      break;
+      // Dynamically compute viewbox (~35km around user GPS)
+      const minLon = (lng - 0.35).toFixed(4);
+      const maxLon = (lng + 0.35).toFixed(4);
+      const minLat = (lat - 0.35).toFixed(4);
+      const maxLat = (lat + 0.35).toFixed(4);
+
+      const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=hospital&countrycodes=ng&viewbox=${minLon},${maxLat},${maxLon},${minLat}&bounded=1&limit=8`;
+      const nomRes = await fetch(nomUrl, {
+        headers: {
+          'User-Agent': 'SensooMobileApp/1.0 (info@sensoo.app)',
+        },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+
+      if (nomRes.ok) {
+        const items = await nomRes.json();
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            const itemLat = parseFloat(item.lat);
+            const itemLon = parseFloat(item.lon);
+            const dist = calculateDistanceKm(lat, lng, itemLat, itemLon);
+            const displayName = item.display_name || '';
+            const name = item.name || displayName.split(',')[0].trim();
+            const key = name.toLowerCase();
+
+            if (dist <= MAX_SEARCH_RADIUS_KM && !seenKeys.has(key)) {
+              seenKeys.add(key);
+              liveFacilities.push({
+                id: `nom-${item.place_id}`,
+                name,
+                distance: `${dist.toFixed(1)} km`,
+                distanceKm: dist,
+                status: 'Verified Health Facility',
+                phone: '112',
+                address: displayName.split(',').slice(1, 3).join(',').trim() || 'Nigeria',
+                lat: itemLat,
+                lng: itemLon,
+              });
+            }
+          }
+        }
+      }
+    } catch (_err) {
+      // Dynamic live search completed
     }
   }
 
-  // Sort strictly by physical distance to user coordinates
+  // Sort strictly by real-time GPS distance
   liveFacilities.sort((a, b) => a.distanceKm - b.distanceKm);
   return liveFacilities.slice(0, 6);
 }
