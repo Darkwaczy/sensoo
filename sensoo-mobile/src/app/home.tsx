@@ -2474,15 +2474,6 @@ export default function HomeScreen() {
       {/* ======================================================== */}
       {voiceSettings.enabled && (
         <View style={styles.floatingVoiceContainer} pointerEvents="box-none">
-          {voiceNotice && !isVoiceListening && (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.voiceQuickPill}
-              onPress={() => setVoiceNotice(null)}
-            >
-              <Text style={styles.voiceQuickPillText}>💬 {voiceNotice}</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity
             style={[
               styles.heartPumpFloatingBtn,
