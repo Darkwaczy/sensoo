@@ -605,16 +605,16 @@ export default function HomeScreen() {
       });
 
       console.log('[VoiceAssistant] Listening to voice...');
-      setVoiceNotice('Listening... Tap again when done');
+      setVoiceNotice('Listening...');
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsVoiceListening(true);
 
-      // Auto-stop after 5s if user hasn't manually tapped again
+      // Auto-stop after 3.5s of speech and process automatically (no need to tap again)
       if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = setTimeout(() => {
         stopAndExecuteVoice();
-      }, 5000);
+      }, 3500);
     } catch (err) {
       console.warn('[VoiceAssistant] Error starting voice recording:', err);
       setIsVoiceListening(false);
@@ -632,8 +632,9 @@ export default function HomeScreen() {
     const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
     const shouldSpeak = Boolean(voiceSettings.voiceReplyEnabled);
 
-    if (parsed.intent === 'GREETING') {
-      const greetingText = `Hello, ${userName}. What product are we scanning today?`;
+    // If user said "Hey Sensoo", greeting, or wake word: reply immediately with voice
+    if (parsed.intent === 'GREETING' || parsed.hasWakeWord) {
+      const greetingText = `Hello, ${userName}! How can I help you today?`;
       setVoiceNotice(greetingText);
       if (shouldSpeak) {
         speakWithCartesia(greetingText);
@@ -688,7 +689,8 @@ export default function HomeScreen() {
     } else if (parsed.intent === 'GUIDANCE') {
       router.push({ pathname: '/agent', params: { query: cmd } });
     } else {
-      const fallbackText = `I heard: "${cmd}". Say "Scan product", "Find clinic", or "Check medicine".`;
+      // Natural reply without exposing or writing out the raw transcribed words
+      const fallbackText = `How can I help you today, ${userName}? You can ask to scan a product, find nearby clinics, or check safety precautions.`;
       setVoiceNotice(fallbackText);
       if (shouldSpeak) {
         speakWithCartesia(fallbackText);
