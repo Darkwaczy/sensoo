@@ -327,7 +327,7 @@ export default function ResultScreen() {
           <TouchableOpacity
             style={styles.headerButton}
             activeOpacity={0.7}
-            onPress={() => router.replace('/scanner')}
+            onPress={() => (params.isHistoryInspection === 'true' ? router.back() : router.replace('/scanner'))}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={styles.backChevronText}>‹</Text>
@@ -620,16 +620,28 @@ export default function ResultScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        ) : params.isHistoryInspection === 'true' ? (
+          <View style={styles.bottomButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.primarySolidButton,
+                { backgroundColor: config.primaryButtonColor, flex: 1 },
+              ]}
+              activeOpacity={0.85}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.primarySolidButtonText}>Back to History</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View style={styles.bottomButtonsRow}>
             <TouchableOpacity
               style={styles.secondaryOutlineButton}
               activeOpacity={0.8}
-              onPress={handleSecondaryAction}
+              onPress={() => router.replace('/home')}
             >
-              <Text style={styles.secondaryButtonIcon}>{config.actionSecondaryIcon}</Text>
               <Text style={[styles.secondaryButtonText, { color: '#059669' }]}>
-                {config.actionSecondaryText}
+                Done
               </Text>
             </TouchableOpacity>
 
@@ -639,9 +651,9 @@ export default function ResultScreen() {
                 { backgroundColor: config.primaryButtonColor },
               ]}
               activeOpacity={0.85}
-              onPress={handleDone}
+              onPress={() => router.replace('/scanner')}
             >
-              <Text style={styles.primarySolidButtonText}>Done</Text>
+              <Text style={styles.primarySolidButtonText}>Scan Another</Text>
             </TouchableOpacity>
           </View>
         )}
