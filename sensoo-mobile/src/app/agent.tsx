@@ -564,7 +564,7 @@ export default function AgentScreenComponent() {
         setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 1500);
       }
     } catch {
-      const fallback = "This product's batch serial does not match authorized manufacturer records in the NAFDAC registry. Stop usage immediately.";
+      const fallback = "I'm having trouble connecting to the network right now. Please check your internet connection and try again.";
       setVoiceAiReply(fallback);
       setVoiceStatus('speaking');
       speakTextAloud(fallback, selectedLanguage);
@@ -929,14 +929,19 @@ export default function AgentScreenComponent() {
         setTimeout(() => router.push({ pathname: '/scanner', params: { origin: 'chat' } }), 1200);
       } else if (res.action === 'CLINICS' || lowerQ.includes('clinic') || lowerQ.includes('hospital') || lowerQ.includes('emergency')) {
         const liveNearby = clinicsList.length > 0 ? clinicsList : await getNearbyClinics(userLocationInfo.lat ?? undefined, userLocationInfo.lng ?? undefined);
+        const replyText =
+          res.reply && !res.reply.includes('flagged as counterfeit')
+            ? res.reply
+            : `Here are the closest accredited emergency medical facilities to your live GPS coordinates in ${userLocationInfo.city || 'Nigeria'}:`;
+
         appendChatMessage({
           sender: 'agent',
-          text: res.reply || 'Here are the closest verified emergency medical facilities to your live GPS coordinates:',
+          text: replyText,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           model: res.modelUsed,
           clinicsData: liveNearby,
         });
-        speakTextAloud(res.reply, selectedLanguage);
+        speakTextAloud(replyText, selectedLanguage);
       } else {
         appendChatMessage({
           sender: 'agent',
@@ -949,7 +954,7 @@ export default function AgentScreenComponent() {
     } catch {
       appendChatMessage({
         sender: 'agent',
-        text: "I am having trouble connecting. This product has been flagged as counterfeit. Do not consume or sell it.",
+        text: "I am having trouble connecting to the network right now. Please check your internet connection and try again.",
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
     } finally {
