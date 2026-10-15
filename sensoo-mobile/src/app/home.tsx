@@ -605,7 +605,7 @@ export default function HomeScreen() {
       });
 
       console.log('[VoiceAssistant] Listening to voice...');
-      setVoiceNotice('Listening...');
+      setVoiceNotice(null);
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsVoiceListening(true);
@@ -2469,7 +2469,7 @@ export default function HomeScreen() {
       {/* ======================================================== */}
       {voiceSettings.enabled && (
         <View style={styles.floatingVoiceContainer} pointerEvents="box-none">
-          {voiceNotice && (
+          {voiceNotice && !isVoiceListening && (
             <TouchableOpacity
               activeOpacity={0.85}
               style={styles.voiceQuickPill}

@@ -197,9 +197,7 @@ export default function ResultScreen() {
   }, []);
 
   const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const conflictCity = params.conflictCity
-    ? params.conflictCity
-    : (userCity.toLowerCase().includes('abuja') ? 'Lagos, Nigeria' : 'Abuja, Nigeria');
+  const conflictCity = params.conflictCity || 'Prior Registered Scan Point';
   const conflictTime = params.conflictTime || 'Simultaneous Clone Signal';
 
   const resolvedProductName = params.productName

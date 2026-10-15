@@ -282,7 +282,7 @@ export default function CheckingScreen() {
       } else {
         const resolvedExpiry = (apiResponse as any).expiry_date || '';
         const resolvedNafdac = (apiResponse as any).nafdac || '';
-        const conflictCity = prevScan?.location || (scenario === 'IMPOSSIBLE_TRAVEL' ? (detectedCity.toLowerCase().includes('abuja') ? 'Lagos, Nigeria' : 'Abuja, Nigeria') : '');
+        const conflictCity = prevScan?.location || '';
         const conflictTime = prevScan?.time || (scenario === 'IMPOSSIBLE_TRAVEL' ? 'Simultaneous telemetry' : '');
 
         router.replace({
