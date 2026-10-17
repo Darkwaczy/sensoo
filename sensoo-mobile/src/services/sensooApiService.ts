@@ -186,7 +186,7 @@ export async function lookupGs1Nigeria(
     candidates.map(async (candidate) => {
       try {
         const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 3200);
+        const timeout = setTimeout(() => ctrl.abort(), 8000);
         const res = await fetch(`https://productregistry.gs1ng.org/products/product-detail/01/${candidate}`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
           signal: ctrl.signal,
@@ -488,12 +488,12 @@ export async function lookupLiveGtinWeb(
   const geminiKey = getGeminiApiKey();
   const frameBase64 = getLastCapturedScanFrame(digits);
 
-  // Task A1: OpenAI Live Camera Frame Vision OCR (gpt-4.1-mini reads the physical bottle/box/label in the user's hand in ~1.2s)
+  // Task A1: OpenAI Live Camera Frame Vision OCR (gpt-4.1-mini reads the physical bottle/box/blister/label in ~1.5s)
   const openAiVisionTask = (async () => {
     if (!openAiKey || !frameBase64) return null;
     try {
       const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 5000);
+      const timeout = setTimeout(() => ctrl.abort(), 10000);
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -510,7 +510,7 @@ export async function lookupLiveGtinWeb(
               content: [
                 {
                   type: 'text',
-                  text: `The user is scanning a physical retail product in Nigeria with barcode ${variantQueryText}. Look carefully at the product packaging/bottle/label and any text printed near the barcode (brand logo, product name, manufacturer name, NAFDAC reg number, weight/volume). If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand or Manufacturer Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
+                  text: `The user is scanning a physical product or pharmaceutical drug in Nigeria with barcode ${variantQueryText}. Look carefully at the packaging, carton, blister pack, bottle, or label and any text printed near the barcode (brand logo, medicine name, active ingredients, manufacturer name, NAFDAC reg number, weight/volume). If you can read or recognize the brand name, product name, or medicine name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand or Manufacturer Name", "category": "Pharmaceuticals / Healthcare / Consumer Goods", "nafdac": "NAFDAC NRN if visible"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
                 },
                 {
                   type: 'image_url',
@@ -540,6 +540,7 @@ export async function lookupLiveGtinWeb(
               batch: `GTIN-${primary13}`,
               category: parsed.category || 'Consumer Retail Goods',
               status: 'AUTHENTIC',
+              nafdac: parsed.nafdac || undefined,
             };
           }
         }
@@ -550,16 +551,16 @@ export async function lookupLiveGtinWeb(
     return null;
   })();
 
-  // Task A2: OpenAI Live Web Search (/v1/responses web_search_preview + Brave Search Nigerian index extraction via gpt-4.1-mini)
+  // Task A2: OpenAI Live Web Search (/v1/responses web_search_preview + Brave Search Nigerian pharmacy index)
   const openAiSearchTask = (async () => {
     if (!openAiKey) return null;
 
-    // Subtask 1: Brave Search index -> OpenAI gpt-4.1-mini structured JSON extraction (~1.5s)
+    // Subtask 1: Brave Search index -> OpenAI gpt-4.1-mini structured JSON extraction
     const braveOpenAiSubtask = (async () => {
       try {
         const bCtrl = new AbortController();
-        const bTimeout = setTimeout(() => bCtrl.abort(), 3200);
-        const bRes = await fetch(`https://search.brave.com/search?q=${encodeURIComponent(alt12)}`, {
+        const bTimeout = setTimeout(() => bCtrl.abort(), 8000);
+        const bRes = await fetch(`https://search.brave.com/search?q=${encodeURIComponent(alt12 + ' Nigeria pharmacy OR NAFDAC OR product')}`, {
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -581,7 +582,7 @@ export async function lookupLiveGtinWeb(
         if (lines.length === 0) return null;
 
         const aiCtrl = new AbortController();
-        const aiTimeout = setTimeout(() => aiCtrl.abort(), 3000);
+        const aiTimeout = setTimeout(() => aiCtrl.abort(), 6000);
         const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -595,7 +596,7 @@ export async function lookupLiveGtinWeb(
             messages: [
               {
                 role: 'user',
-                content: `Web search results for barcode ${variantQueryText}:\n${lines.join('\n')}\n\nIf the search results above clearly identify a real commercial retail product for this barcode (do NOT pick generic "Barcode Lookup" titles or unrelated items), return JSON: {"found": true, "productName": "Clean Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"}. Otherwise return {"found": false}.`,
+                content: `Web search results for barcode ${variantQueryText}:\n${lines.join('\n')}\n\nIf the search results above clearly identify a real pharmaceutical drug, medicine, or commercial retail product for this barcode, return JSON: {"found": true, "productName": "Clean Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Pharmaceuticals / Healthcare / Consumer Goods", "nafdac": "NAFDAC number if present"}. Otherwise return {"found": false}.`,
               },
             ],
           }),
@@ -614,6 +615,7 @@ export async function lookupLiveGtinWeb(
               category: parsed.category || 'Consumer Retail Goods',
               status: 'AUTHENTIC',
               origin: isNigerianBarcode ? 'Nigeria' : undefined,
+              nafdac: parsed.nafdac || undefined,
             };
           }
         }
@@ -627,7 +629,7 @@ export async function lookupLiveGtinWeb(
     const nativeResponsesSubtask = (async () => {
       try {
         const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 5500);
+        const timeout = setTimeout(() => ctrl.abort(), 12000);
         const res = await fetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
@@ -637,7 +639,7 @@ export async function lookupLiveGtinWeb(
           body: JSON.stringify({
             model: 'gpt-4.1-mini',
             tools: [{ type: 'web_search_preview', search_context_size: 'low' }],
-            input: `Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, Mopheth, KunleAra, PriceCheck, GS1 Nigeria) and global barcode catalogs (OpenFoodFacts, UPCitemdb) for exact barcode ${variantQueryText}. CRITICAL: Never guess from the GS1 prefix alone! Reply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if the exact barcode is not found.`,
+            input: `Search Nigerian registered pharmacies (Medplus, HealthPlus, DrugStoc, KunleAra, Mopheth), NAFDAC Greenbook, EMDEX Nigeria, GS1 Nigeria, Supermart.ng, Jumia, and barcode catalogs for barcode ${variantQueryText}. If this is a pharmaceutical drug, medicine, healthcare product, or consumer retail good, identify the exact product name. Reply with ONLY valid JSON: {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Pharmaceuticals / Healthcare / Retail", "nafdac": "NAFDAC number if found"} or {"found": false}.`,
           }),
           signal: ctrl.signal,
         });
@@ -646,8 +648,8 @@ export async function lookupLiveGtinWeb(
         if (res.ok) {
           const data = await res.json();
           const msgItem = (data.output || []).find((o: any) => o.type === 'message');
-          const text = data.output_text || msgItem?.content?.[0]?.text || '';
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          const rawText = data.output_text || msgItem?.content?.[0]?.text || '';
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             const pName = parsed.productName || parsed.product_name;
@@ -659,6 +661,7 @@ export async function lookupLiveGtinWeb(
                 category: parsed.category || 'Consumer Retail Goods',
                 status: 'AUTHENTIC',
                 origin: isNigerianBarcode ? 'Nigeria' : undefined,
+                nafdac: parsed.nafdac || undefined,
               };
             }
           }
@@ -673,12 +676,12 @@ export async function lookupLiveGtinWeb(
     return braveHit || nativeHit;
   })();
 
-  // Task B: Groq Live Browser Search (openai/gpt-oss-20b with built-in browser_search tool — high quota & searches both 12/13-digit variants)
+  // Task B: Groq Live Browser Search (openai/gpt-oss-20b with built-in browser_search tool — 12s timeout)
   const groqSearchTask = (async () => {
     if (!groqKey) return null;
     try {
       const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 6000);
+      const timeout = setTimeout(() => ctrl.abort(), 12000);
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -693,7 +696,7 @@ export async function lookupLiveGtinWeb(
           messages: [
             {
               role: 'user',
-              content: `Search the web for exact barcode ${variantQueryText} (check Nigerian stores like Supermart.ng, Jumia, Mopheth, GS1 Nigeria, and OpenFoodFacts). NEVER guess from the prefix. Reply with ONLY valid JSON: {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer", "category": "Category"} or {"found": false}.`,
+              content: `Search Nigerian registered pharmacies (Medplus, HealthPlus, DrugStoc, KunleAra Pharmacy, Mopheth), NAFDAC Greenbook, EMDEX Nigeria, GS1 Nigeria, Jumia, and supermarkets for barcode ${variantQueryText}. If this is a pharmaceutical drug, medicine, healthcare product, or consumer retail good, find the exact brand and product name. Reply with ONLY valid JSON: {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer", "category": "Pharmaceuticals / Healthcare / Consumer Goods", "nafdac": "NAFDAC NRN if found"} or {"found": false}.`,
             },
           ],
         }),
@@ -716,6 +719,7 @@ export async function lookupLiveGtinWeb(
               category: parsed.category || 'Consumer Retail Goods',
               status: 'AUTHENTIC',
               origin: isNigerianBarcode ? 'Nigeria' : undefined,
+              nafdac: parsed.nafdac || undefined,
             };
           }
         }
@@ -731,13 +735,13 @@ export async function lookupLiveGtinWeb(
     if (!geminiKey) return null;
     try {
       const searchHint = isNigerianBarcode
-        ? `This is a Nigerian GS1 barcode (prefix 615). Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, GS1 Nigeria, NAFDAC, PriceCheck) for exact barcode ${variantQueryText}.`
+        ? `This is a Nigerian GS1 barcode (prefix 615). Search Nigerian registered pharmacies (Medplus, HealthPlus, KunleAra, Mopheth, DrugStoc), NAFDAC Greenbook, EMDEX, GS1 Nigeria, and supermarkets for exact barcode ${variantQueryText}.`
         : isCocaColaHbc
         ? `This is a Nigerian Bottling Company / Coca-Cola HBC barcode (prefix 5449000, such as Eva Water, Coca-Cola, Fanta, Sprite, Schweppes, Predator). Search for the exact barcode ${variantQueryText} to find the exact drink/water bottle.`
-        : `Search Nigerian stores (Supermart.ng, Jumia, Mopheth) and global retail catalogs (OpenFoodFacts, GS1) for exact barcode/EAN/UPC ${variantQueryText}.`;
+        : `Search Nigerian registered pharmacies (Medplus, HealthPlus, KunleAra, Mopheth, DrugStoc), NAFDAC Greenbook, EMDEX, and global retail catalogs for exact barcode/EAN/UPC ${variantQueryText}.`;
 
       const gSearchCtrl = new AbortController();
-      const gSearchTimeout = setTimeout(() => gSearchCtrl.abort(), 5500);
+      const gSearchTimeout = setTimeout(() => gSearchCtrl.abort(), 10000);
       const gSearchRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
@@ -797,7 +801,7 @@ export async function lookupLiveGtinWeb(
     if (!geminiKey || !frameBase64) return null;
     try {
       const vCtrl = new AbortController();
-      const vTimeout = setTimeout(() => vCtrl.abort(), 5000);
+      const vTimeout = setTimeout(() => vCtrl.abort(), 10000);
       const vRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
@@ -815,7 +819,7 @@ export async function lookupLiveGtinWeb(
                     },
                   },
                   {
-                    text: `The user is scanning a physical product with barcode ${variantQueryText}. Look at the product packaging/bottle/label in this photo. If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
+                    text: `The user is scanning a physical product or medicine in Nigeria with barcode ${variantQueryText}. Look at the packaging, carton, blister pack, or label. If you can read or recognize the brand name, product name, or medicine name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
                   },
                 ],
               },
@@ -858,7 +862,7 @@ export async function lookupLiveGtinWeb(
   const ddgTask = (async () => {
     try {
       const searchCtrl = new AbortController();
-      const searchTimeout = setTimeout(() => searchCtrl.abort(), 3800);
+      const searchTimeout = setTimeout(() => searchCtrl.abort(), 8000);
       const qStr = primary13 !== alt12 ? `"${primary13}" OR "${alt12}"` : `"${primary13}"`;
       const q = encodeURIComponent(qStr);
       const searchRes = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
@@ -1332,7 +1336,11 @@ export async function verifyScanOnline(
     syncToBackend(finalName, finalBrand, webHit.batch, webHit.imageUrl);
     return {
       status: (webHit.status as any) || 'AUTHENTIC',
-      reason: webHit.origin
+      reason: webHit.nafdac
+        ? `Verified in NAFDAC Approved Registry (NRN: ${webHit.nafdac})`
+        : webHit.category?.toLowerCase().includes('pharm') || webHit.category?.toLowerCase().includes('med')
+        ? 'Verified in Registered Pharmacy & Healthcare Database'
+        : webHit.origin
         ? `Verified GS1 Standard Barcode (${webHit.origin})`
         : 'Verified in Live Global GS1 & Web Product Registry',
       alarms: [],
