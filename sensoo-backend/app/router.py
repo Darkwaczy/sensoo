@@ -48,24 +48,16 @@ def register_product(
         select(ProductCode).where(ProductCode.code == product_in.code)
     ).first()
     if existing:
-        # If existing record has a placeholder name, upgrade it with the real specific name
-        if (
-            existing.product_name.startswith("Authentic GS1 Product")
-            or existing.product_name.startswith("Unregistered")
-            or existing.product_name.startswith("Item ")
-        ) and not product_in.product_name.startswith("Authentic GS1 Product"):
+        if not product_in.product_name.startswith("Authentic GS1 Product"):
             existing.product_name = product_in.product_name
             existing.manufacturer = product_in.manufacturer
             existing.batch_id = product_in.batch_id
+            if product_in.image_url:
+                existing.image_url = product_in.image_url
             session.add(existing)
             session.commit()
             session.refresh(existing)
-            return existing
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Product code '{product_in.code}' already exists.",
-        )
+        return existing
     product = verification_action.create(session, data=product_in)
     return product
 
@@ -119,8 +111,13 @@ def clear_feed(
 ) -> Any:
     from sqlmodel import delete
     session.exec(delete(ScanTelemetryRecord))
+    # Also remove dynamically cached numeric barcode records so fresh lookups stay clean
+    all_codes = session.exec(select(ProductCode)).all()
+    for pc in all_codes:
+        if pc.code.isdigit():
+            session.delete(pc)
     session.commit()
-    return {"status": "cleared", "message": "Telemetry feed wiped successfully"}
+    return {"status": "cleared", "message": "Telemetry feed and dynamic barcode cache wiped successfully"}
 
 
 @router.get("/greenbook/products")
@@ -360,11 +357,18 @@ async def live_barcode_lookup(barcode: str) -> Any:
 
                     for i, l in enumerate(links):
                         clean_title = re.sub(r'<[^>]+>', '', l).strip()
+                        raw_snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip() if i < len(snippets) else ""
+                        # Ensure the barcode digits actually appear in the title or snippet (prevents DDG quote-drop false positives)
+                        has_exact_code = (clean_digits in clean_title) or (clean_digits in raw_snippet)
+                        if not has_exact_code and clean_digits.startswith("0") and len(clean_digits) == 13:
+                            has_exact_code = (clean_digits[1:] in clean_title) or (clean_digits[1:] in raw_snippet)
+                        if not has_exact_code:
+                            continue
+
                         clean_title = re.sub(r'\s*-\s*(eBay|Amazon|AliExpress|Scents by Pearls|Beauty Hub|Jumia|Konga).*$', '', clean_title, flags=re.I).strip()
                         if clean_title and not clean_title.lower().startswith('barcode lookup'):
                             found_title = clean_title
-                            if i < len(snippets):
-                                found_snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip()
+                            found_snippet = raw_snippet
                             break
                 if found_title:
                     break

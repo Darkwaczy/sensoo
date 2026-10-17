@@ -33,7 +33,7 @@ export interface DeviceLinkInfo {
 
 const SCANS_FILE = `${FileSystem.documentDirectory || ''}sensoo_user_scans.json`;
 const DEVICE_FILE = `${FileSystem.documentDirectory || ''}sensoo_device_identity.json`;
-const RESET_FLAG_FILE = `${FileSystem.documentDirectory || ''}sensoo_reset_history_flag_v3.txt`;
+const RESET_FLAG_FILE = `${FileSystem.documentDirectory || ''}sensoo_reset_history_flag_v4.txt`;
 
 // In-memory cache to guarantee instantaneous synchronous returns
 let cachedDeviceId: string | null = null;

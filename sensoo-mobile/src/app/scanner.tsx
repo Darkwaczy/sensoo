@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { setLastCapturedScanFrame } from '../services/sensooApiService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RETICLE_SIZE = Math.min(SCREEN_WIDTH * 0.72, 270);
@@ -26,6 +27,7 @@ export default function ScannerScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const [scanMode, setScanMode] = useState<'barcode' | 'qr'>('barcode');
   const [isScanning, setIsScanning] = useState(true);
+  const cameraRef = useRef<CameraView>(null);
 
   // Automatically request permission on mount if not yet determined
   useEffect(() => {
@@ -129,6 +131,27 @@ export default function ScannerScreen() {
     setStabilizingCode(code);
     setCountdownRemaining(2);
 
+    // Silently capture a lightweight snapshot of the product packaging during the 2.2s hold-steady window
+    setTimeout(() => {
+      try {
+        cameraRef.current
+          ?.takePictureAsync({
+            quality: 0.25,
+            base64: true,
+            skipProcessing: true,
+            shutterSound: false,
+          })
+          .then((photo) => {
+            if (photo?.base64) {
+              setLastCapturedScanFrame(activeCodeRef.current || code, photo.base64);
+            }
+          })
+          .catch(() => {});
+      } catch {
+        // Ignore snapshot errors
+      }
+    }, 250);
+
     lockAnim.setValue(0);
     Animated.timing(lockAnim, {
       toValue: 1,
@@ -189,6 +212,7 @@ export default function ScannerScreen() {
       {/* REAL Live Expo Camera Feed */}
       {permission?.granted ? (
         <CameraView
+          ref={cameraRef}
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torchOn}
