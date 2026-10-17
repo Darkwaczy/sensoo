@@ -183,7 +183,20 @@ export async function lookupGs1Nigeria(
 }
 
 /**
- * Direct client-side lookup against Open Food Facts & Open Beauty Facts (in parallel)
+ * Helper to return both 13-digit (leading 0) and 12-digit variants for 0-prefixed EAN/UPC codes
+ */
+function getBarcodeVariants(rawDigits: string): string[] {
+  const variants = [rawDigits];
+  if (rawDigits.length === 12) {
+    variants.unshift(`0${rawDigits}`);
+  } else if (rawDigits.length === 13 && rawDigits.startsWith('0')) {
+    variants.push(rawDigits.slice(1));
+  }
+  return Array.from(new Set(variants));
+}
+
+/**
+ * Direct client-side lookup against Open Food Facts & Open Beauty Facts (in parallel across 12/13-digit variants)
  */
 export async function lookupOpenFoodFacts(
   barcode: string
@@ -191,12 +204,19 @@ export async function lookupOpenFoodFacts(
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
+  const variants = getBarcodeVariants(digits);
   const domains = ['world.openfoodfacts.org', 'world.openbeautyfacts.org'];
+  const queries: { domain: string; code: string }[] = [];
+  for (const code of variants) {
+    for (const domain of domains) {
+      queries.push({ domain, code });
+    }
+  }
 
   const results = await Promise.all(
-    domains.map(async (domain) => {
+    queries.map(async ({ domain, code }) => {
       try {
-        const url = `https://${domain}/api/v2/product/${digits}.json`;
+        const url = `https://${domain}/api/v2/product/${code}.json`;
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 3000);
         const res = await fetch(url, {
@@ -242,36 +262,43 @@ export async function lookupUpcItemDb(
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 3000);
-    const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${digits}`, {
-      headers: { 'User-Agent': 'SensooApp/1.0 (Hackathon Verification Engine)' },
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
+  const variants = getBarcodeVariants(digits);
+  const results = await Promise.all(
+    variants.map(async (code) => {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`, {
+          headers: { 'User-Agent': 'SensooApp/1.0 (Hackathon Verification Engine)' },
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
 
-    if (res.ok) {
-      const json = await res.json();
-      const items = json.items || [];
-      if (items.length > 0) {
-        const item = items[0];
-        const title = item.title || 'Commercial Retail Product';
-        const brand = item.brand || item.publisher || 'Commercial Manufacturer';
-        const images = item.images || [];
-        const img = images.length > 0 ? images[0] : undefined;
-        return {
-          productName: String(title),
-          brand: String(brand),
-          batch: `UPC-${digits.slice(-6)}`,
-          imageUrl: img,
-        };
+        if (res.ok) {
+          const json = await res.json();
+          const items = json.items || [];
+          if (items.length > 0) {
+            const item = items[0];
+            const title = item.title || 'Commercial Retail Product';
+            const brand = item.brand || item.publisher || 'Commercial Manufacturer';
+            const images = item.images || [];
+            const img = images.length > 0 ? images[0] : undefined;
+            return {
+              productName: String(title),
+              brand: String(brand),
+              batch: `UPC-${digits.slice(-6)}`,
+              imageUrl: img,
+            };
+          }
+        }
+      } catch {
+        // Continue
       }
-    }
-  } catch {
-    // Continue
-  }
-  return null;
+      return null;
+    })
+  );
+
+  return results.find((r) => r !== null) || null;
 }
 
 /**
@@ -351,34 +378,16 @@ function decodeHtmlEntities(str: string): string {
     .trim();
 }
 
-function decodeSecret(b64: string): string {
-  try {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    let str = '';
-    let i = 0;
-    while (i < b64.length) {
-      const enc1 = chars.indexOf(b64.charAt(i++));
-      const enc2 = chars.indexOf(b64.charAt(i++));
-      const enc3 = chars.indexOf(b64.charAt(i++));
-      const enc4 = chars.indexOf(b64.charAt(i++));
-      const chr1 = (enc1 << 2) | (enc2 >> 4);
-      const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-      const chr3 = ((enc3 & 3) << 6) | enc4;
-      str += String.fromCharCode(chr1);
-      if (enc3 !== 64 && enc3 !== -1) str += String.fromCharCode(chr2);
-      if (enc4 !== 64 && enc4 !== -1) str += String.fromCharCode(chr3);
-    }
-    return str.replace(/\0/g, '');
-  } catch {
-    return '';
-  }
+function getOpenAiApiKey(): string {
+  return (process.env.EXPO_PUBLIC_OPENAI_API_KEY || '').trim();
 }
 
 function getGroqApiKey(): string {
-  return (
-    process.env.EXPO_PUBLIC_GROQ_API_KEY ||
-    decodeSecret('Z3NrX2JVTjhjdEE2bTdqcE1hc2ttRnJkV0dkeWJ3RllWeFpjb3l3UXczSFVJenhFcHdjQldVMA==')
-  );
+  return (process.env.EXPO_PUBLIC_GROQ_API_KEY || '').trim();
+}
+
+function getGeminiApiKey(): string {
+  return (process.env.EXPO_PUBLIC_GEMINI_API_KEY || '').trim();
 }
 
 /**
@@ -423,7 +432,8 @@ async function fetchProductImageUrl(query: string): Promise<string | null> {
 
 /**
  * Direct client-side lookup via Universal Real-Time GTIN Web Search, Live Camera Packaging OCR, & GS1 verification.
- * Eliminates all ungrounded LLM tasks so product names are NEVER hallucinated from GS1 prefixes.
+ * Runs OpenAI Web Search + OpenAI Vision + Groq Browser Search + Gemini Search/Vision + Web Scraper in parallel.
+ * Checks both 13-digit (leading 0) and 12-digit barcode variants and NEVER hallucinates from GS1 prefixes.
  */
 export async function lookupLiveGtinWeb(
   barcode: string
@@ -440,24 +450,198 @@ export async function lookupLiveGtinWeb(
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
 
-  const isNigerianBarcode = digits.startsWith('615') || digits.startsWith('0615');
-  const isCocaColaHbc = digits.startsWith('5449000');
-  const geminiKey =
-    process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
-    decodeSecret('QVEuQWI4Uk42SjFwVWwxcTh0aVE3cjBNWlc1M1BzYkRQMmhHeWJxaUhOTHIwTTk4SHdEQmc=');
+  const variants = getBarcodeVariants(digits);
+  const primary13 = variants[0];
+  const alt12 = variants.length > 1 ? variants[1] : primary13;
+  const variantQueryText =
+    primary13 !== alt12 ? `"${primary13}" or "${alt12}"` : `"${primary13}"`;
 
-  // Task A: Gemini 2.5 Flash with Live Google Search Grounding (thinkingBudget: 0 -> ~1.8s response!)
+  const isNigerianBarcode = primary13.startsWith('615') || primary13.startsWith('0615');
+  const isCocaColaHbc = primary13.startsWith('5449000');
+
+  const openAiKey = getOpenAiApiKey();
+  const groqKey = getGroqApiKey();
+  const geminiKey = getGeminiApiKey();
+  const frameBase64 = getLastCapturedScanFrame(digits);
+
+  // Task A1: OpenAI Live Camera Frame Vision OCR (gpt-4o-mini reads the physical bottle/box in the user's hand in ~1.2s)
+  const openAiVisionTask = (async () => {
+    if (!openAiKey || !frameBase64) return null;
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openAiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          response_format: { type: 'json_object' },
+          temperature: 0.0,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `The user is scanning a physical retail product in Nigeria with barcode ${variantQueryText}. Look at the product packaging/bottle/label in this photo. If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/jpeg;base64,${frameBase64}`,
+                    detail: 'low',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) {
+          const parsed = JSON.parse(text);
+          const pName = parsed.productName || parsed.product_name;
+          if (parsed.found && pName && !pName.toLowerCase().includes('unknown') && !isGenericProductName(pName)) {
+            return {
+              productName: String(pName).trim(),
+              brand: String(parsed.brand || 'Verified Brand').trim(),
+              batch: `GTIN-${primary13}`,
+              category: parsed.category || 'Consumer Retail Goods',
+              status: 'AUTHENTIC',
+            };
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  })();
+
+  // Task A2: OpenAI Live Web Search (gpt-4o-mini-search-preview searches Nigerian & global stores for both 13-digit and 12-digit variants)
+  const openAiSearchTask = (async () => {
+    if (!openAiKey) return null;
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 5500);
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openAiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini-search-preview',
+          web_search_options: { search_context_size: 'low' },
+          messages: [
+            {
+              role: 'user',
+              content: `Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, Mopheth, PriceCheck, GS1 Nigeria) and global barcode catalogs (OpenFoodFacts, UPCitemdb) for exact barcode ${variantQueryText}. CRITICAL: Never guess from the GS1 prefix alone! Reply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if the exact barcode is not found.`,
+            },
+          ],
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content || '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const pName = parsed.productName || parsed.product_name;
+          if (parsed.found && pName && !pName.toLowerCase().includes('unknown') && !isGenericProductName(pName)) {
+            return {
+              productName: String(pName).trim(),
+              brand: String(parsed.brand || 'Verified Brand').trim(),
+              batch: isNigerianBarcode ? `GS1NG-${primary13.slice(-6)}` : `GTIN-${primary13}`,
+              category: parsed.category || 'Consumer Retail Goods',
+              status: 'AUTHENTIC',
+              origin: isNigerianBarcode ? 'Nigeria' : undefined,
+            };
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  })();
+
+  // Task B: Groq Live Browser Search (openai/gpt-oss-20b with built-in browser_search tool — high quota & searches both 12/13-digit variants)
+  const groqSearchTask = (async () => {
+    if (!groqKey) return null;
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-oss-20b',
+          reasoning_effort: 'low',
+          temperature: 0.0,
+          tools: [{ type: 'browser_search' }],
+          messages: [
+            {
+              role: 'user',
+              content: `Search the web for exact barcode ${variantQueryText} (check Nigerian stores like Supermart.ng, Jumia, Mopheth, GS1 Nigeria, and OpenFoodFacts). NEVER guess from the prefix. Reply with ONLY valid JSON: {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer", "category": "Category"} or {"found": false}.`,
+            },
+          ],
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content || '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const pName = parsed.productName || parsed.product_name;
+          if (parsed.found && pName && !pName.toLowerCase().includes('unknown') && !isGenericProductName(pName)) {
+            return {
+              productName: String(pName).trim(),
+              brand: String(parsed.brand || 'Verified Brand').trim(),
+              batch: isNigerianBarcode ? `GS1NG-${primary13.slice(-6)}` : `GTIN-${primary13}`,
+              category: parsed.category || 'Consumer Retail Goods',
+              status: 'AUTHENTIC',
+              origin: isNigerianBarcode ? 'Nigeria' : undefined,
+            };
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  })();
+
+  // Task C1: Gemini 2.5 Flash with Live Google Search Grounding (thinkingBudget: 0)
   const geminiSearchTask = (async () => {
     if (!geminiKey) return null;
     try {
       const searchHint = isNigerianBarcode
-        ? `This is a Nigerian GS1 barcode (prefix 615). Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, GS1 Nigeria, NAFDAC, PriceCheck) for exact barcode "${digits}".`
+        ? `This is a Nigerian GS1 barcode (prefix 615). Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, GS1 Nigeria, NAFDAC, PriceCheck) for exact barcode ${variantQueryText}.`
         : isCocaColaHbc
-        ? `This is a Nigerian Bottling Company / Coca-Cola HBC barcode (prefix 5449000, such as Eva Water, Coca-Cola, Fanta, Sprite, Schweppes, Predator). Search for the exact barcode "${digits}" to find the exact drink/water bottle.`
-        : `Search global retail catalogs, OpenFoodFacts, Beauty/Cosmetics databases, GS1, and online stores for exact barcode/EAN/UPC "${digits}".`;
+        ? `This is a Nigerian Bottling Company / Coca-Cola HBC barcode (prefix 5449000, such as Eva Water, Coca-Cola, Fanta, Sprite, Schweppes, Predator). Search for the exact barcode ${variantQueryText} to find the exact drink/water bottle.`
+        : `Search Nigerian stores (Supermart.ng, Jumia, Mopheth) and global retail catalogs (OpenFoodFacts, GS1) for exact barcode/EAN/UPC ${variantQueryText}.`;
 
       const gSearchCtrl = new AbortController();
-      const gSearchTimeout = setTimeout(() => gSearchCtrl.abort(), 6500);
+      const gSearchTimeout = setTimeout(() => gSearchCtrl.abort(), 5500);
       const gSearchRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
@@ -469,7 +653,7 @@ export async function lookupLiveGtinWeb(
                 role: 'user',
                 parts: [
                   {
-                    text: `${searchHint}\nCRITICAL RULE: NEVER guess or invent a product name from the 3-digit GS1 country or company prefix alone! Only return "found": true if the exact barcode "${digits}" is matched in search results.\nReply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if the exact barcode "${digits}" is not found.`,
+                    text: `${searchHint}\nCRITICAL RULE: NEVER guess or invent a product name from the 3-digit GS1 country or company prefix alone! Only return "found": true if the exact barcode ${variantQueryText} is matched in search results.\nReply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if not found.`,
                   },
                 ],
               },
@@ -497,7 +681,7 @@ export async function lookupLiveGtinWeb(
             return {
               productName: String(pName).trim(),
               brand: String(parsed.brand || 'Verified Brand').trim(),
-              batch: isNigerianBarcode ? `GS1NG-${digits.slice(-6)}` : `GTIN-${digits}`,
+              batch: isNigerianBarcode ? `GS1NG-${primary13.slice(-6)}` : `GTIN-${primary13}`,
               category: parsed.category || 'Consumer Retail Goods',
               status: 'AUTHENTIC',
               origin: isNigerianBarcode ? 'Nigeria' : undefined,
@@ -512,13 +696,12 @@ export async function lookupLiveGtinWeb(
     return null;
   })();
 
-  // Task B: Gemini 2.5 Flash Live Camera Frame Vision OCR (reads the physical product bottle/box in the user's hand!)
+  // Task C2: Gemini 2.5 Flash Live Camera Frame Vision OCR
   const geminiVisionTask = (async () => {
-    const frameBase64 = getLastCapturedScanFrame(digits);
     if (!geminiKey || !frameBase64) return null;
     try {
       const vCtrl = new AbortController();
-      const vTimeout = setTimeout(() => vCtrl.abort(), 5500);
+      const vTimeout = setTimeout(() => vCtrl.abort(), 5000);
       const vRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
@@ -536,7 +719,7 @@ export async function lookupLiveGtinWeb(
                     },
                   },
                   {
-                    text: `The user is scanning a physical product with barcode "${digits}". Look at the product packaging/bottle/label in this photo. If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
+                    text: `The user is scanning a physical product with barcode ${variantQueryText}. Look at the product packaging/bottle/label in this photo. If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
                   },
                 ],
               },
@@ -562,7 +745,7 @@ export async function lookupLiveGtinWeb(
             return {
               productName: String(pName).trim(),
               brand: String(parsed.brand || 'Verified Brand').trim(),
-              batch: `GTIN-${digits}`,
+              batch: `GTIN-${primary13}`,
               category: parsed.category || 'Consumer Retail Goods',
               status: 'AUTHENTIC',
             };
@@ -575,12 +758,13 @@ export async function lookupLiveGtinWeb(
     return null;
   })();
 
-  // Task C: Strict Exact-Match Web Merchant Scraper (only accepts result if exact barcode digits appear in snippet/title)
+  // Task D: Strict Exact-Match Web Merchant Scraper across both 13-digit and 12-digit variants
   const ddgTask = (async () => {
     try {
       const searchCtrl = new AbortController();
-      const searchTimeout = setTimeout(() => searchCtrl.abort(), 3500);
-      const q = encodeURIComponent(`"${digits}"`);
+      const searchTimeout = setTimeout(() => searchCtrl.abort(), 3800);
+      const qStr = primary13 !== alt12 ? `"${primary13}" OR "${alt12}"` : `"${primary13}"`;
+      const q = encodeURIComponent(qStr);
       const searchRes = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
         headers: {
           'User-Agent':
@@ -592,14 +776,11 @@ export async function lookupLiveGtinWeb(
 
       if (searchRes.ok) {
         const html = await searchRes.text();
-        // Verify that the page actually contains the exact barcode string (prevents DuckDuckGo quote-drop false positives)
         const blockMatches = [...html.matchAll(/<div[^>]+class="[^"]*result__body[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi)];
         for (const b of blockMatches) {
           const blockHtml = b[1] || '';
           const plainBlock = decodeHtmlEntities(blockHtml.replace(/<[^>]+>/g, ' '));
-          const hasExactDigits =
-            plainBlock.includes(digits) ||
-            (digits.length === 13 && digits.startsWith('0') && plainBlock.includes(digits.slice(1)));
+          const hasExactDigits = plainBlock.includes(primary13) || plainBlock.includes(alt12);
           if (!hasExactDigits) continue;
 
           const titleMatch = blockHtml.match(/<a[^>]+class="result__a"[^>]*>(.*?)<\/a>/i);
@@ -607,7 +788,7 @@ export async function lookupLiveGtinWeb(
 
           let clean = decodeHtmlEntities(titleMatch[1].replace(/<[^>]+>/g, '').trim());
           clean = clean
-            .replace(/\s*[-|]\s*(KunleAra Pharmacy|StoreApp|Jumia|Konga|Amazon|eBay|Walmart|Supermart|AliExpress|Pharmacy|PriceCheck|Open Food Facts).*$/i, '')
+            .replace(/\s*[-|]\s*(KunleAra Pharmacy|Mopheth|StoreApp|Jumia|Konga|Amazon|eBay|Walmart|Supermart|AliExpress|Pharmacy|PriceCheck|Open Food Facts).*$/i, '')
             .trim();
           const lower = clean.toLowerCase();
           const isInvalid =
@@ -626,7 +807,7 @@ export async function lookupLiveGtinWeb(
             return {
               productName: clean,
               brand,
-              batch: `GTIN-${digits}`,
+              batch: `GTIN-${primary13}`,
               category: 'Consumer Goods',
               status: 'AUTHENTIC',
             };
@@ -639,12 +820,12 @@ export async function lookupLiveGtinWeb(
     return null;
   })();
 
-  // Task D: Sensoo Backend Read-Only Resolver
+  // Task E: Sensoo Backend Read-Only Resolver
   const backendLookupTask = (async () => {
     try {
       const ctrl = new AbortController();
       const timeout = setTimeout(() => ctrl.abort(), 3500);
-      const res = await fetch(`${SENSOO_API_BASE_URL}/lookup?barcode=${digits}`, {
+      const res = await fetch(`${SENSOO_API_BASE_URL}/lookup?barcode=${primary13}`, {
         signal: ctrl.signal,
       });
       clearTimeout(timeout);
@@ -655,12 +836,12 @@ export async function lookupLiveGtinWeb(
           data.found &&
           data.product_name &&
           !isGenericProductName(data.product_name) &&
-          (!data.snippet || data.snippet.includes(digits) || data.product_name.includes(digits))
+          (!data.snippet || data.snippet.includes(primary13) || data.snippet.includes(alt12))
         ) {
           return {
             productName: data.product_name,
             brand: data.brand || 'Verified Brand',
-            batch: `GTIN-${digits}`,
+            batch: `GTIN-${primary13}`,
             category: data.category || 'Consumer Retail Goods',
             status: data.status || 'AUTHENTIC',
             origin: data.origin_country,
@@ -674,7 +855,18 @@ export async function lookupLiveGtinWeb(
     return null;
   })();
 
-  const [geminiSearchHit, geminiVisionHit, ddgHit, backendLookupHit] = await Promise.all([
+  const [
+    openAiSearchHit,
+    openAiVisionHit,
+    groqSearchHit,
+    geminiSearchHit,
+    geminiVisionHit,
+    ddgHit,
+    backendLookupHit,
+  ] = await Promise.all([
+    openAiSearchTask,
+    openAiVisionTask,
+    groqSearchTask,
     geminiSearchTask,
     geminiVisionTask,
     ddgTask,
@@ -690,7 +882,14 @@ export async function lookupLiveGtinWeb(
     origin?: string;
     imageUrl?: string;
     nafdac?: string;
-  } | null = geminiSearchHit || ddgHit || geminiVisionHit || backendLookupHit;
+  } | null =
+    openAiSearchHit ||
+    groqSearchHit ||
+    geminiSearchHit ||
+    ddgHit ||
+    openAiVisionHit ||
+    geminiVisionHit ||
+    backendLookupHit;
 
   if (winner) {
     if (!winner.imageUrl) {
@@ -703,8 +902,9 @@ export async function lookupLiveGtinWeb(
 }
 
 /**
- * Mathematically validates GS1 barcode (Modulo-10 checksum) and identifies country of origin.
+ * Mathematically validates GS1 barcode (Modulo-10 checksum) and identifies GS1 registry status.
  * Supports EAN-13, UPC-A (12-digit), EAN-8, and GTIN-14.
+ * Note: Many Nigerian manufacturers register 06/07 prefixes via GS1 Global, so we never falsely label them "United States & Canada".
  */
 export function validateGs1Barcode(barcode: string): {
   isValid: boolean;
@@ -728,31 +928,14 @@ export function validateGs1Barcode(barcode: string): {
   const calcCheck = (10 - (sum % 10)) % 10;
   const isValid = calcCheck === checkDigit;
 
-  // Determine Country of Origin by GS1 Prefix
-  let country = 'International / GS1 Global';
+  let country = 'GS1 Global Standard';
   let prefix = '';
   if (digits.length === 13 || (digits.length === 14 && digits.startsWith('0'))) {
     const ean13 = digits.length === 14 ? digits.slice(1) : digits;
     prefix = ean13.slice(0, 3);
-    if (prefix.startsWith('890')) country = 'India';
-    else if (prefix.startsWith('629')) country = 'United Arab Emirates (UAE)';
-    else if (prefix.startsWith('615')) country = 'Nigeria';
-    else if (prefix.startsWith('690') || prefix.startsWith('691') || prefix.startsWith('692') || prefix.startsWith('693') || prefix.startsWith('694') || prefix.startsWith('695') || prefix.startsWith('696') || prefix.startsWith('697') || prefix.startsWith('698') || prefix.startsWith('699')) country = 'China';
-    else if (prefix.startsWith('500') || prefix.startsWith('501') || prefix.startsWith('502') || prefix.startsWith('503') || prefix.startsWith('504') || prefix.startsWith('505') || prefix.startsWith('506') || prefix.startsWith('507') || prefix.startsWith('508') || prefix.startsWith('509')) country = 'United Kingdom';
-    else if (prefix.startsWith('30') || prefix.startsWith('31') || prefix.startsWith('32') || prefix.startsWith('33') || prefix.startsWith('34') || prefix.startsWith('35') || prefix.startsWith('36') || prefix.startsWith('37')) country = 'France';
-    else if (prefix.startsWith('40') || prefix.startsWith('41') || prefix.startsWith('42') || prefix.startsWith('43') || prefix.startsWith('44')) country = 'Germany';
-    else if (prefix.startsWith('880')) country = 'South Korea';
-    else if (prefix.startsWith('84')) country = 'Spain';
-    else if (prefix.startsWith('80') || prefix.startsWith('81') || prefix.startsWith('82') || prefix.startsWith('83')) country = 'Italy';
-    else if (prefix.startsWith('76')) country = 'Switzerland';
-    else if (prefix.startsWith('600') || prefix.startsWith('601')) country = 'South Africa';
-    else if (prefix.startsWith('603')) country = 'Ghana';
-    else if (prefix.startsWith('616')) country = 'Kenya';
-    else if (prefix.startsWith('622')) country = 'Egypt';
-    else if (prefix.startsWith('00') || prefix.startsWith('01') || prefix.startsWith('02') || prefix.startsWith('03') || prefix.startsWith('04') || prefix.startsWith('05') || prefix.startsWith('06') || prefix.startsWith('07') || prefix.startsWith('08') || prefix.startsWith('09')) country = 'United States & Canada';
+    if (prefix.startsWith('615')) country = 'Nigeria';
   } else if (digits.length === 12) {
-    country = 'United States & Canada';
-    prefix = digits.slice(0, 3);
+    prefix = `0${digits.slice(0, 2)}`;
   }
 
   return { isValid, country, prefix };

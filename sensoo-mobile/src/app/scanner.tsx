@@ -179,8 +179,13 @@ export default function ScannerScreen() {
 
   const handleBarcodeScanned = (result: { data: string; type: string }) => {
     if (!isScanning || isLockedRef.current) return;
-    const clean = (result.data || '').trim();
+    let clean = (result.data || '').trim();
     if (!clean) return;
+
+    // Preserve leading 0 when camera reads a 0-prefixed 13-digit EAN-13 as a 12-digit code
+    if (/^\d{12}$/.test(clean)) {
+      clean = `0${clean}`;
+    }
 
     // Postpone decay as long as barcode is actively visible
     if (resetTimerRef.current) {
@@ -219,7 +224,7 @@ export default function ScannerScreen() {
           barcodeScannerSettings={{
             barcodeTypes:
               scanMode === 'barcode'
-                ? ['ean13', 'upc_a', 'code128', 'itf14']
+                ? ['ean13', 'ean8', 'code128', 'itf14']
                 : ['qr', 'datamatrix'],
           }}
           onBarcodeScanned={isScanning ? handleBarcodeScanned : undefined}
