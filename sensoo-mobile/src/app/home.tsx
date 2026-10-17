@@ -632,15 +632,16 @@ export default function HomeScreen() {
     const userName = currentUser?.fullName ? currentUser.fullName.trim().split(' ')[0] : 'there';
     const shouldSpeak = Boolean(voiceSettings.voiceReplyEnabled);
 
-    // If user said ONLY "Hey Sensoo" or a greeting without an action: reply with greeting
+    // 0. Greeting / Wake Word in-place
     if (parsed.intent === 'GREETING') {
-      const greetingText = `Hello, ${userName}! How can I help you today?`;
-      setVoiceNotice(greetingText);
+      const greetingNotice = `Hello, ${userName}!`;
+      const greetingVoice = `Hello, ${userName}! How can I help you today? You can say scan product, view history, or check alerts.`;
+      setVoiceNotice(greetingNotice);
       if (shouldSpeak) {
-        speakWithCartesia(greetingText);
+        speakWithCartesia(greetingVoice);
       }
       setTimeout(() => {
-        setVoiceNotice((prev) => (prev === greetingText ? null : prev));
+        setVoiceNotice((prev) => (prev === greetingNotice ? null : prev));
       }, 5000);
       return;
     } else if (parsed.intent === 'SCAN') {
@@ -649,59 +650,122 @@ export default function HomeScreen() {
         speakWithCartesia('Opening scanner');
       }
       router.push('/scanner');
-    } else if (parsed.intent === 'CLINIC') {
-      setVoiceNotice('Finding nearby clinics...');
-      if (shouldSpeak) {
-        speakWithCartesia('Finding nearby clinics');
-      }
-      router.push({ pathname: '/agent', params: { initialScreen: 'clinics' } });
-    } else if (parsed.intent === 'REPORT') {
-      setVoiceNotice('Opening report center...');
-      if (shouldSpeak) {
-        speakWithCartesia('Opening safety report');
-      }
-      router.push({ pathname: '/agent', params: { query: 'I bought a fake product' } });
     } else if (parsed.intent === 'HISTORY') {
       setVoiceNotice('Opening scan history...');
       if (shouldSpeak) {
         speakWithCartesia('Opening recent scan history');
       }
       setActiveView('RecentScans');
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
     } else if (parsed.intent === 'ALERTS') {
       setVoiceNotice('Opening safety alerts...');
       if (shouldSpeak) {
         speakWithCartesia('Opening drug and safety alerts');
       }
       setActiveView('Alerts');
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
     } else if (parsed.intent === 'PROFILE') {
+      setVoiceNotice('Opening profile...');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening your profile');
+      }
       setActiveView('Profile');
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
     } else if (parsed.intent === 'NOTIFICATIONS') {
+      setVoiceNotice('Opening notifications...');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening notifications');
+      }
       setPreviousView(activeView);
       setActiveView('Notifications');
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
     } else if (parsed.intent === 'PERSONAL_INFO') {
-      setShowPersonalInfoModal(true);
-    } else if (parsed.intent === 'PRIVACY_SECURITY') {
-      router.push('/privacy-security' as any);
-    } else if (parsed.intent === 'LOCATION_REGION') {
-      router.push('/location-region' as any);
-    } else if (parsed.intent === 'ABOUT') {
-      router.push('/about-sensoo' as any);
-    } else if (parsed.intent === 'GUIDANCE' || cmd.trim().split(' ').length >= 2) {
-      // If user asked an open question or guidance, forward directly to the AI agent
-      setVoiceNotice('Asking Sensoo AI...');
+      setVoiceNotice('Opening personal info...');
       if (shouldSpeak) {
-        speakWithCartesia('Consulting Sensoo AI');
+        speakWithCartesia('Opening personal information');
       }
-      router.push({ pathname: '/agent', params: { query: cmd } });
-    } else {
-      // Short unclassified speech fallback
-      const fallbackText = `How can I help you today, ${userName}? You can ask to scan a product, find nearby clinics, or check safety precautions.`;
-      setVoiceNotice(fallbackText);
+      setShowPersonalInfoModal(true);
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
+    } else if (parsed.intent === 'PRIVACY_SECURITY') {
+      setVoiceNotice('Opening privacy settings...');
       if (shouldSpeak) {
-        speakWithCartesia(fallbackText);
+        speakWithCartesia('Opening privacy and security');
+      }
+      router.push('/privacy-security' as any);
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
+    } else if (parsed.intent === 'LOCATION_REGION') {
+      setVoiceNotice('Opening location settings...');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening location settings');
+      }
+      router.push('/location-region' as any);
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
+    } else if (parsed.intent === 'ABOUT') {
+      setVoiceNotice('Opening About Sensoo...');
+      if (shouldSpeak) {
+        speakWithCartesia('Opening About Sensoo');
+      }
+      router.push('/about-sensoo' as any);
+      setTimeout(() => {
+        setVoiceNotice(null);
+      }, 3500);
+    } else if (parsed.intent === 'CLINIC') {
+      // In-place vocal response - does not open chat
+      const clinicNotice = 'Finding nearby clinics...';
+      const clinicVoice = 'To view accredited healthcare centers, you can browse verified clinics or tap the Agent tab.';
+      setVoiceNotice(clinicNotice);
+      if (shouldSpeak) {
+        speakWithCartesia(clinicVoice);
       }
       setTimeout(() => {
-        setVoiceNotice((prev) => (prev === fallbackText ? null : prev));
+        setVoiceNotice((prev) => (prev === clinicNotice ? null : prev));
+      }, 5000);
+    } else if (parsed.intent === 'REPORT') {
+      // In-place vocal response - does not open chat
+      const reportNotice = 'Reporting fake product...';
+      const reportVoice = 'To file a counterfeit drug report, open any scan from your history and tap Report to NAFDAC.';
+      setVoiceNotice(reportNotice);
+      if (shouldSpeak) {
+        speakWithCartesia(reportVoice);
+      }
+      setTimeout(() => {
+        setVoiceNotice((prev) => (prev === reportNotice ? null : prev));
+      }, 5000);
+    } else if (parsed.intent === 'GUIDANCE') {
+      // In-place vocal guidance - never redirects to chat
+      const guideNotice = 'Sensoo Voice Assistant';
+      const guideVoice = `I can help you scan products, browse recall alerts, or view your scan history. Try saying 'Scan product' or 'Show alerts'.`;
+      setVoiceNotice(guideNotice);
+      if (shouldSpeak) {
+        speakWithCartesia(guideVoice);
+      }
+      setTimeout(() => {
+        setVoiceNotice((prev) => (prev === guideNotice ? null : prev));
+      }, 5000);
+    } else {
+      // General in-place fallback - stays on the current screen
+      const fallbackNotice = `Voice ready: ${userName}`;
+      const fallbackVoice = `How can I help you today, ${userName}? You can say 'Scan product', 'Check alerts', or 'View history'.`;
+      setVoiceNotice(fallbackNotice);
+      if (shouldSpeak) {
+        speakWithCartesia(fallbackVoice);
+      }
+      setTimeout(() => {
+        setVoiceNotice((prev) => (prev === fallbackNotice ? null : prev));
       }, 5000);
     }
   };
@@ -2509,9 +2573,11 @@ export default function HomeScreen() {
                 style={[
                   styles.heartPumpBadgeText,
                   isVoiceListening && { color: '#A7F3D0', fontWeight: '800' },
+                  Boolean(voiceNotice) && { color: '#6EE7B7' },
                 ]}
+                numberOfLines={1}
               >
-                {isVoiceListening ? 'Listening...' : 'Hey Sensoo'}
+                {isVoiceListening ? 'Listening...' : (voiceNotice || 'Hey Sensoo')}
               </Text>
             </View>
           </TouchableOpacity>

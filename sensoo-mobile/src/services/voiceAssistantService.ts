@@ -111,36 +111,47 @@ export const parseVoiceCommand = (transcript: string): ParsedVoiceCommand => {
     .replace(/\s+/g, ' ')
     .trim();
 
+  const wakeWordRegex = /\b(hey\s+)?(sensoo|senso|sensu|censu|censoo|senzo|sensor|censor|sansa|sinsoo|cinsoo)\b/i;
   const hasWakeWord =
-    normalized.includes('hey sensoo') ||
-    normalized.includes('hay sensoo') ||
-    normalized.includes('hey censu') ||
-    normalized.includes('hey sensor') ||
-    normalized.includes('hey sansa') ||
-    normalized.includes('sansa') ||
+    wakeWordRegex.test(normalized) ||
+    normalized.includes('sensoo') ||
+    normalized.includes('senso') ||
     normalized.includes('sensor') ||
-    normalized.includes('sensoo');
+    normalized.includes('censu') ||
+    normalized.includes('sensu');
 
   // Strip wake phrase for intent classification
   const cleanCmd = normalized
-    .replace(/hey\s+sensoo/gi, '')
-    .replace(/hay\s+sensoo/gi, '')
-    .replace(/hey\s+censu/gi, '')
-    .replace(/hey\s+sensor/gi, '')
-    .replace(/hey\s+sansa/gi, '')
-    .replace(/sansa/gi, '')
-    .replace(/sensor/gi, '')
-    .replace(/sensoo/gi, '')
+    .replace(/\b(hey\s+)?(sensoo|senso|sensu|censu|censoo|senzo|sensor|censor|sansa|sinsoo|cinsoo)\b/gi, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
   let intent: VoiceCommandIntent = 'UNKNOWN';
   let actionSummary = 'Command not recognized';
 
   // 0. Greeting / Wake Word check (e.g. "Hey! Sensoo", "Hello Sensoo", "Hi Sensoo", or wake word alone)
-  const greetingWords = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'how are you', 'sup', 'yo', ''];
-  if (hasWakeWord && greetingWords.includes(cleanCmd)) {
+  const greetingWords = [
+    '',
+    'hello',
+    'hi',
+    'hey',
+    'good morning',
+    'good afternoon',
+    'good evening',
+    'how are you',
+    'sup',
+    'yo',
+    'whats up',
+    'what s up',
+    'how far',
+    'kedu',
+    'bawo',
+    'sannu',
+    'there',
+  ];
+  if ((hasWakeWord && greetingWords.includes(cleanCmd)) || (hasWakeWord && cleanCmd.length === 0) || cleanCmd === '') {
     intent = 'GREETING';
-    actionSummary = 'Greeting: "Hello! What product are we scanning today?"';
+    actionSummary = 'Greeting: "Hello! How can I help you today?"';
   }
   // 1. Comprehensive SCANNING intent keywords
   else if (
