@@ -22,6 +22,10 @@ export default function AutoUpdateBanner() {
 
     checkAndFetchUpdate();
 
+    // Re-check after 2s and 6s to allow native launcher update check to complete
+    const t1 = setTimeout(() => checkAndFetchUpdate(), 2200);
+    const t2 = setTimeout(() => checkAndFetchUpdate(), 6000);
+
     // Check again whenever user returns to the app from background
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
@@ -30,6 +34,8 @@ export default function AutoUpdateBanner() {
     });
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       subscription.remove();
     };
   }, []);

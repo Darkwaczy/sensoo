@@ -73,19 +73,41 @@ export function getLastCapturedScanFrame(code: string): string | null {
   return lastCapturedFrameBase64;
 }
 
+function cleanProductName(raw?: string | null): string {
+  if (!raw) return '';
+  let clean = decodeHtmlEntities(String(raw).trim());
+  // Strip leading barcode numbers e.g. "8411250013061 - Cirage Liquide" -> "Cirage Liquide"
+  clean = clean.replace(/^\d{8,14}\s*[-–:]\s*/, '').trim();
+  return clean;
+}
+
 export function isGenericProductName(name?: string | null): boolean {
   if (!name) return true;
-  const n = name.trim();
-  if (!n) return true;
+  const n = String(name).trim();
+  if (!n || n.length < 2) return true;
   const lower = n.toLowerCase();
   return (
-    n.startsWith('Authentic GS1 Product') ||
-    n.startsWith('Unregistered') ||
-    n.startsWith('Item ') ||
-    n.startsWith('Product (') ||
-    n === 'Verified Product' ||
-    n === 'Scanned Item' ||
-    n === 'Commercial Retail Product' ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === 'none' ||
+    lower === 'false' ||
+    lower === 'true' ||
+    lower === 'agua embotellada' ||
+    lower === 'agua' ||
+    lower === 'eau' ||
+    lower === 'water' ||
+    lower === 'bottled water' ||
+    lower === 'table water' ||
+    lower === 'purified water' ||
+    lower === 'generic' ||
+    lower === 'unknown' ||
+    lower.startsWith('authentic gs1 product') ||
+    lower.startsWith('unregistered') ||
+    lower.startsWith('item ') ||
+    lower.startsWith('product (') ||
+    lower === 'verified product' ||
+    lower === 'scanned item' ||
+    lower === 'commercial retail product' ||
     lower.includes('almarai fresh laban') ||
     lower.includes("trader joe's organic reduced fat milk") ||
     lower.includes('donuts glaseados')
@@ -146,9 +168,11 @@ export async function lookupGs1Nigeria(
         : brand || 'GS1 Nigeria Licensed Member';
 
     if (name || brand) {
+      const cleanedName = cleanProductName(name || `${brand} Packaged Product`);
+      const cleanedBrand = cleanProductName(company || brand || 'GS1 Nigeria Member');
       return {
-        productName: name || `${brand} Packaged Product`,
-        brand: company || brand || 'GS1 Nigeria Member',
+        productName: cleanedName,
+        brand: cleanedBrand,
         batch: `GS1NG-${digits.slice(-6)}`,
         expiryDate: '',
         nafdac: '',
@@ -1253,14 +1277,16 @@ export async function verifyScanOnline(
 
   // Priority 3: OpenFoodFacts & OpenBeautyFacts
   if (offHit && !isGenericProductName(offHit.productName)) {
-    syncToBackend(offHit.productName, offHit.brand, offHit.batch, offHit.imageUrl);
+    const finalName = cleanProductName(offHit.productName);
+    const finalBrand = cleanProductName(offHit.brand);
+    syncToBackend(finalName, finalBrand, offHit.batch, offHit.imageUrl);
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in OpenFoodFacts Global Barcode Whitelist',
       alarms: [],
       new_state: 'IN_STOCK',
-      product_name: offHit.productName,
-      manufacturer: offHit.brand,
+      product_name: finalName,
+      manufacturer: finalBrand,
       batch_id: offHit.batch,
       image_url: offHit.imageUrl,
     };
@@ -1268,14 +1294,16 @@ export async function verifyScanOnline(
 
   // Priority 4: UPCitemdb Global Commercial Catalog
   if (upcHit && !isGenericProductName(upcHit.productName)) {
-    syncToBackend(upcHit.productName, upcHit.brand, upcHit.batch, upcHit.imageUrl);
+    const finalName = cleanProductName(upcHit.productName);
+    const finalBrand = cleanProductName(upcHit.brand);
+    syncToBackend(finalName, finalBrand, upcHit.batch, upcHit.imageUrl);
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in Global Commercial Retail Barcode Whitelist',
       alarms: [],
       new_state: 'IN_STOCK',
-      product_name: upcHit.productName,
-      manufacturer: upcHit.brand,
+      product_name: finalName,
+      manufacturer: finalBrand,
       batch_id: upcHit.batch,
       image_url: upcHit.imageUrl,
     };
@@ -1283,21 +1311,25 @@ export async function verifyScanOnline(
 
   // Priority 5: EMDEX Nigeria Drug Database
   if (emdexHit && !isGenericProductName(emdexHit.productName)) {
-    syncToBackend(emdexHit.productName, emdexHit.brand, emdexHit.batch);
+    const finalName = cleanProductName(emdexHit.productName);
+    const finalBrand = cleanProductName(emdexHit.brand);
+    syncToBackend(finalName, finalBrand, emdexHit.batch);
     return {
       status: 'AUTHENTIC',
       reason: 'Verified in EMDEX Nigeria National Drug Whitelist',
       alarms: [],
       new_state: 'IN_STOCK',
-      product_name: emdexHit.productName,
-      manufacturer: emdexHit.brand,
+      product_name: finalName,
+      manufacturer: finalBrand,
       batch_id: emdexHit.batch,
     };
   }
 
-  // Priority 6: Gemini 2.5 Flash Live Google Search Grounding, Camera Packaging Vision, & Web GTIN Index
+  // Priority 6: OpenAI gpt-4.1-mini Vision + Web Search, Groq Browser Search, & GTIN Registry
   if (webHit && !isGenericProductName(webHit.productName)) {
-    syncToBackend(webHit.productName, webHit.brand, webHit.batch, webHit.imageUrl);
+    const finalName = cleanProductName(webHit.productName);
+    const finalBrand = cleanProductName(webHit.brand);
+    syncToBackend(finalName, finalBrand, webHit.batch, webHit.imageUrl);
     return {
       status: (webHit.status as any) || 'AUTHENTIC',
       reason: webHit.origin
@@ -1305,14 +1337,15 @@ export async function verifyScanOnline(
         : 'Verified in Live Global GS1 & Web Product Registry',
       alarms: [],
       new_state: 'IN_STOCK',
-      product_name: webHit.productName,
-      manufacturer: webHit.brand,
+      product_name: finalName,
+      manufacturer: finalBrand,
       batch_id: webHit.batch,
       image_url: webHit.imageUrl,
       nafdac: webHit.nafdac || null,
       category: webHit.category || null,
     };
   }
+
 
   // Priority 6.5: Sensoo Backend exact product record (fallback for commercial barcodes)
   if (backendData && backendData.status === 'AUTHENTIC' && !isGenericProductName(backendData.product_name)) {
