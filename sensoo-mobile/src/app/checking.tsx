@@ -181,10 +181,13 @@ export default function CheckingScreen() {
           ? apiResponse.manufacturer
           : (prevScan?.manufacturer || apiResponse.manufacturer || 'Registered Brand');
 
-      // Only serialized security codes (SNS-...) or backend-flagged clones trigger duplicate ALREADY_PURCHASED alert.
+      // Only serialized security codes (SNS-...) or explicit clone serials trigger duplicate ALREADY_PURCHASED alert.
       // Standard commercial retail EAN barcodes (e.g. bread, water) are mass-produced batch codes, not single-use serials!
-      const isSingleUseSerial = scannedCode.startsWith('SNS-') || scannedCode.toUpperCase().includes('CLONE') || scannedCode.length > 15;
-      const shouldFlagClone = isBackendClone || (isSingleUseSerial && !!prevScan);
+      const isSingleUseSerial =
+        scannedCode.startsWith('SNS-') ||
+        scannedCode.toUpperCase().includes('CLONE') ||
+        scannedCode.length > 15;
+      const shouldFlagClone = isSingleUseSerial && (isBackendClone || !!prevScan);
 
       if (shouldFlagClone) {
         scenario = 'ALREADY_PURCHASED';
@@ -199,7 +202,7 @@ export default function CheckingScreen() {
         verdictStatus = 'GENUINE';
         resolvedName = preferredName;
         resolvedBrand = preferredBrand;
-        resolvedBatch = apiResponse.batch_id || 'VERIFIED-BATCH';
+        resolvedBatch = apiResponse.batch_id || prevScan?.batchId || 'VERIFIED-BATCH';
         resolvedReason = apiResponse.reason || 'Verified by Manufacturer. Registered in national database.';
       } else {
         // Real alarms classification directly from live backend
@@ -236,6 +239,7 @@ export default function CheckingScreen() {
 
       const userLoc = await getCurrentUserLocation();
       const detectedCity = userLoc.city || 'Eket';
+      const resolvedImg = apiResponse?.image_url || prevScan?.imageUrl || undefined;
 
       setVerdict({
         code: scannedCode,
@@ -261,7 +265,7 @@ export default function CheckingScreen() {
         status: verdictStatus === 'GENUINE' ? 'VERIFIED' : (scenario === 'WRONG_REGION' ? 'WRONG_REGION' : 'COUNTERFEIT'),
         statusText: verdictStatus === 'GENUINE' ? 'Verified' : (scenario === 'WRONG_REGION' ? 'Wrong Region' : (scenario === 'ALREADY_PURCHASED' ? 'Already Purchased' : 'Counterfeit')),
         scenario,
-        imageUrl: apiResponse?.image_url || undefined,
+        imageUrl: resolvedImg,
         location: userLoc.city || 'Current Location',
         manufacturer: resolvedBrand,
         batchId: resolvedBatch,
@@ -280,8 +284,8 @@ export default function CheckingScreen() {
           },
         });
       } else {
-        const resolvedExpiry = (apiResponse as any).expiry_date || '';
-        const resolvedNafdac = (apiResponse as any).nafdac || '';
+        const resolvedExpiry = (apiResponse as any).expiry_date || prevScan?.expiryDate || '';
+        const resolvedNafdac = (apiResponse as any).nafdac || prevScan?.nafdac || '';
         const conflictCity = prevScan?.location || '';
         const conflictTime = prevScan?.time || (scenario === 'IMPOSSIBLE_TRAVEL' ? 'Simultaneous telemetry' : '');
 
@@ -294,7 +298,7 @@ export default function CheckingScreen() {
             manufacturer: resolvedBrand,
             batchId: resolvedBatch,
             reason: resolvedReason,
-            imageUrl: apiResponse.image_url || '',
+            imageUrl: resolvedImg || '',
             expiryDate: resolvedExpiry,
             nafdac: resolvedNafdac,
             conflictCity,

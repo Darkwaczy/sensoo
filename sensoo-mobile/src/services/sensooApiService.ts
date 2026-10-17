@@ -42,7 +42,7 @@ export interface FeedItem {
   image_url?: string | null;
 }
 
-import { getPersistentDeviceId } from './sensooStorageService';
+import { getPersistentDeviceId, getStoredScans } from './sensooStorageService';
 import { fetchLiveNafdacGreenbook } from './nafdacGreenbookService';
 
 // Fallback in-memory device ID
@@ -51,58 +51,99 @@ getPersistentDeviceId().then((id) => {
   activeDeviceId = id;
 });
 
+export function isGenericProductName(name?: string | null): boolean {
+  if (!name) return true;
+  const n = name.trim();
+  if (!n) return true;
+  return (
+    n.startsWith('Authentic GS1 Product') ||
+    n.startsWith('Unregistered') ||
+    n.startsWith('Item ') ||
+    n.startsWith('Product (') ||
+    n === 'Verified Product' ||
+    n === 'Scanned Item' ||
+    n === 'Commercial Retail Product'
+  );
+}
+
 /**
  * Direct client-side lookup against GS1 Nigeria National Product Registry (productregistry.gs1ng.org)
+ * Supports both 13-digit (EAN-13) and 14-digit (0-prefixed GTIN-14) Nigerian 615 barcodes.
  */
 export async function lookupGs1Nigeria(
   barcode: string
 ): Promise<{ productName: string; brand: string; batch: string; expiryDate: string; nafdac: string; category: string } | null> {
   const digits = barcode.replace(/[^0-9]/g, '');
-  if (!digits.startsWith('615') || digits.length < 12) return null;
+  const isNig13 = digits.startsWith('615') && digits.length === 13;
+  const isNig14 = digits.startsWith('0615') && digits.length === 14;
+  if (!isNig13 && !isNig14) return null;
 
-  try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 4500);
-    const res = await fetch(`https://productregistry.gs1ng.org/products/product-detail/01/${digits}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      signal: ctrl.signal,
-    });
-    clearTimeout(timeout);
+  const candidates = isNig13 ? [digits, `0${digits}`] : [digits, digits.slice(1)];
 
-    if (res.ok) {
-      const html = await res.text();
-      const descMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
-      const keysMatch = html.match(/<meta\s+name=["']keywords["']\s+content=["']([^"']+)["']/i);
-      const authMatch = html.match(/<meta\s+name=["']author["']\s+content=["']([^"']+)["']/i);
+  for (const candidate of candidates) {
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 4500);
+      const res = await fetch(`https://productregistry.gs1ng.org/products/product-detail/01/${candidate}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
 
-      let name: string | null = null;
-      if (descMatch && descMatch[1].includes(' - ')) {
-        name = descMatch[1].split(' - ')[1].trim();
-      } else if (descMatch) {
-        name = descMatch[1].trim();
+      if (res.ok) {
+        const html = await res.text();
+        const descMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+        const keysMatch = html.match(/<meta\s+name=["']keywords["']\s+content=["']([^"']+)["']/i);
+        const authMatch = html.match(/<meta\s+name=["']author["']\s+content=["']([^"']+)["']/i);
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+        const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+
+        let name: string | null = null;
+        if (descMatch && descMatch[1].includes(' - ')) {
+          name = descMatch[1].split(' - ')[1].trim();
+        } else if (descMatch && !descMatch[1].toLowerCase().includes('gs1 nigeria')) {
+          name = descMatch[1].trim();
+        }
+        if ((!name || name.length < 3) && h1Match) {
+          const h1Clean = h1Match[1].trim();
+          if (h1Clean && !h1Clean.toLowerCase().includes('gs1') && !h1Clean.toLowerCase().includes('not found')) {
+            name = h1Clean;
+          }
+        }
+        if ((!name || name.length < 3) && titleMatch) {
+          const tClean = titleMatch[1].replace(/\s*[-|]\s*GS1.*$/i, '').trim();
+          if (tClean && !tClean.toLowerCase().includes('gs1') && !tClean.toLowerCase().includes('not found')) {
+            name = tClean;
+          }
+        }
+
+        let brand: string | null = null;
+        if (keysMatch) {
+          const parts = keysMatch[1].split(',').map((p) => p.trim());
+          if (parts.length >= 2 && parts[1] && !parts[1].toLowerCase().includes('gs1')) {
+            brand = parts[1];
+          }
+        }
+
+        const company =
+          authMatch && !authMatch[1].toLowerCase().includes('gs1')
+            ? authMatch[1].trim()
+            : brand || 'GS1 Nigeria Licensed Member';
+
+        if (name || brand) {
+          return {
+            productName: name || `${brand} Packaged Product`,
+            brand: company || brand || 'GS1 Nigeria Member',
+            batch: `GS1NG-${digits.slice(-6)}`,
+            expiryDate: '',
+            nafdac: '',
+            category: 'Nigerian FMCG / Packaged Goods',
+          };
+        }
       }
-
-      let brand: string | null = null;
-      if (keysMatch) {
-        const parts = keysMatch[1].split(',').map((p) => p.trim());
-        if (parts.length >= 2 && parts[1]) brand = parts[1];
-      }
-
-      const company = authMatch ? authMatch[1].trim() : (brand || 'GS1 Nigeria Licensed Member');
-
-      if (name || brand) {
-        return {
-          productName: name || `${brand} Packaged Product`,
-          brand: company || brand || 'GS1 Nigeria Member',
-          batch: `GS1NG-${digits.slice(-6)}`,
-          expiryDate: '',
-          nafdac: '',
-          category: 'Packaged FMCG Goods',
-        };
-      }
+    } catch {
+      // Try next candidate
     }
-  } catch {
-    // Continue
   }
   return null;
 }
@@ -469,11 +510,78 @@ export async function lookupLiveGtinWeb(
     // Continue to Gemini & Groq fallback
   }
 
-  // 2. High-Precision AI Reasoning Engine (Gemini 2.5 Flash / Flash Lite)
+  // 2. High-Precision AI Reasoning Engine with Live Google Search Grounding (Gemini 2.5 Flash)
   const geminiKey =
     process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
     decodeSecret('QVEuQWI4Uk42SjFwVWwxcTh0aVE3cjBNWlc1M1BzYkRQMmhHeWJxaUhOTHIwTTk4SHdEQmc=');
   if (geminiKey) {
+    const isNigerianBarcode = digits.startsWith('615') || digits.startsWith('0615');
+    const searchHint = isNigerianBarcode
+      ? `This is a Nigerian GS1 barcode (prefix 615). Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, GS1 Nigeria, NAFDAC, PriceCheck) for "${digits}".`
+      : `Search global retail catalogs, OpenFoodFacts, GS1, and online stores for barcode/EAN/UPC "${digits}".`;
+
+    // 2A. First attempt: Gemini with Live Google Search Grounding
+    try {
+      const gSearchCtrl = new AbortController();
+      const gSearchTimeout = setTimeout(() => gSearchCtrl.abort(), 5500);
+      const gSearchRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: `${searchHint}\nIdentify the exact real-world commercial retail product for barcode "${digits}". Reply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if completely unidentifiable.`,
+                  },
+                ],
+              },
+            ],
+            tools: [{ google_search: {} }],
+            generationConfig: {
+              temperature: 0.1,
+            },
+          }),
+          signal: gSearchCtrl.signal,
+        }
+      );
+      clearTimeout(gSearchTimeout);
+
+      if (gSearchRes.ok) {
+        const gSearchData = await gSearchRes.json();
+        const parts = gSearchData.candidates?.[0]?.content?.parts || [];
+        const fullText = parts.map((p: any) => p.text || '').join('\n');
+        const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const pName = parsed.productName || parsed.product_name;
+          if (
+            parsed.found &&
+            pName &&
+            !pName.toLowerCase().includes('unknown') &&
+            !isGenericProductName(pName)
+          ) {
+            const img = parsed.imageUrl || (await fetchProductImageUrl(pName));
+            return {
+              productName: String(pName).trim(),
+              brand: String(parsed.brand || 'Verified Brand').trim(),
+              batch: isNigerianBarcode ? `GS1NG-${digits.slice(-6)}` : `GTIN-${digits}`,
+              category: parsed.category || 'Consumer Retail Goods',
+              status: 'AUTHENTIC',
+              origin: isNigerianBarcode ? 'Nigeria' : undefined,
+              imageUrl: img || undefined,
+            };
+          }
+        }
+      }
+    } catch {
+      // Fallback to direct JSON mode below
+    }
+
+    // 2B. Second attempt: Direct fast JSON mode
     try {
       const gCtrl = new AbortController();
       const gTimeout = setTimeout(() => gCtrl.abort(), 4000);
@@ -508,7 +616,12 @@ export async function lookupLiveGtinWeb(
         const gText = gData.candidates?.[0]?.content?.parts?.[0]?.text;
         if (gText) {
           const parsed = JSON.parse(gText);
-          if (parsed.found && parsed.productName && !parsed.productName.toLowerCase().includes('unknown')) {
+          if (
+            parsed.found &&
+            parsed.productName &&
+            !parsed.productName.toLowerCase().includes('unknown') &&
+            !isGenericProductName(parsed.productName)
+          ) {
             let img = parsed.imageUrl;
             if (!img) {
               img = await fetchProductImageUrl(parsed.productName);
@@ -548,7 +661,7 @@ export async function lookupLiveGtinWeb(
             {
               role: 'system',
               content:
-                'You are an authoritative global product barcode registry validator. Respond in valid json format. CRITICAL: If not 100% certain of the exact real-world match, return strictly json: {"found": false}. If 100% certain: {"found": true, "product_name": "...", "brand": "..."}.',
+                'You are an authoritative global and Nigerian product barcode registry validator. Respond in valid json format. CRITICAL: If not certain of the real-world match, return strictly json: {"found": false}. If certain: {"found": true, "product_name": "...", "brand": "..."}.',
             },
             {
               role: 'user',
@@ -566,7 +679,12 @@ export async function lookupLiveGtinWeb(
         const content = groqData.choices?.[0]?.message?.content;
         if (content) {
           const parsed = JSON.parse(content);
-          if (parsed.found && parsed.product_name && !parsed.product_name.toLowerCase().includes('unknown')) {
+          if (
+            parsed.found &&
+            parsed.product_name &&
+            !parsed.product_name.toLowerCase().includes('unknown') &&
+            !isGenericProductName(parsed.product_name)
+          ) {
             const img = await fetchProductImageUrl(parsed.product_name);
             return {
               productName: parsed.product_name,
@@ -593,7 +711,7 @@ export async function lookupLiveGtinWeb(
 
     if (res.ok) {
       const data = await res.json();
-      if (data.found && data.product_name && !data.product_name.startsWith('Authentic GS1 Product')) {
+      if (data.found && data.product_name && !isGenericProductName(data.product_name)) {
         const img = data.image_url || (await fetchProductImageUrl(data.product_name));
         return {
           productName: data.product_name,
@@ -642,8 +760,9 @@ export function validateGs1Barcode(barcode: string): {
   // Determine Country of Origin by GS1 Prefix
   let country = 'International / GS1 Global';
   let prefix = '';
-  if (digits.length === 13) {
-    prefix = digits.slice(0, 3);
+  if (digits.length === 13 || (digits.length === 14 && digits.startsWith('0'))) {
+    const ean13 = digits.length === 14 ? digits.slice(1) : digits;
+    prefix = ean13.slice(0, 3);
     if (prefix.startsWith('890')) country = 'India';
     else if (prefix.startsWith('629')) country = 'United Arab Emirates (UAE)';
     else if (prefix.startsWith('615')) country = 'Nigeria';
@@ -655,6 +774,10 @@ export function validateGs1Barcode(barcode: string): {
     else if (prefix.startsWith('84')) country = 'Spain';
     else if (prefix.startsWith('80') || prefix.startsWith('81') || prefix.startsWith('82') || prefix.startsWith('83')) country = 'Italy';
     else if (prefix.startsWith('76')) country = 'Switzerland';
+    else if (prefix.startsWith('600') || prefix.startsWith('601')) country = 'South Africa';
+    else if (prefix.startsWith('603')) country = 'Ghana';
+    else if (prefix.startsWith('616')) country = 'Kenya';
+    else if (prefix.startsWith('622')) country = 'Egypt';
     else if (prefix.startsWith('00') || prefix.startsWith('01') || prefix.startsWith('02') || prefix.startsWith('03') || prefix.startsWith('04') || prefix.startsWith('05') || prefix.startsWith('06') || prefix.startsWith('07') || prefix.startsWith('08') || prefix.startsWith('09')) country = 'United States & Canada';
   } else if (digits.length === 12) {
     country = 'United States & Canada';
@@ -666,10 +789,13 @@ export function validateGs1Barcode(barcode: string): {
 
 /**
  * Sends a real-time scan verification request to the live Sensoo Backend,
- * backed by immediate real-time 3-tier lookup:
- * 1. Open Food Facts
- * 2. UPCitemdb (commercial retail/FMCG)
- * 3. EMDEX Nigeria (NAFDAC pharmaceuticals)
+ * backed by local verified history cache + multi-tier live lookup:
+ * 0. Local Verified History Cache (prevents second-scan generic regression)
+ * 1. GS1 Nigeria & NAFDAC Greenbook Official Registry
+ * 2. Open Food Facts & Open Beauty Facts
+ * 3. UPCitemdb (commercial retail/FMCG)
+ * 4. EMDEX Nigeria (NAFDAC pharmaceuticals)
+ * 5. Gemini 2.5 Flash with Live Google Search Grounding + Web GTIN Index
  */
 export async function verifyScanOnline(
   code: string,
@@ -679,6 +805,12 @@ export async function verifyScanOnline(
 ): Promise<ScanApiResponse> {
   const cleanCode = code.trim();
   const digitsOnly = cleanCode.replace(/[^0-9]/g, '');
+  const isSingleUseSerial =
+    cleanCode.toUpperCase().startsWith('SNS-') ||
+    cleanCode.toUpperCase().includes('CLONE') ||
+    cleanCode.toUpperCase().startsWith('UNL-') ||
+    cleanCode.length > 15;
+
   const payload: ScanApiRequest = {
     role,
     code: cleanCode,
@@ -688,10 +820,68 @@ export async function verifyScanOnline(
     device_id: activeDeviceId,
   };
 
+  // Tier 0: Check local verified scan cache so re-scanning a known product NEVER regresses to a generic name
+  let cachedRealScan: {
+    name: string;
+    manufacturer?: string;
+    batchId?: string;
+    imageUrl?: string;
+    nafdac?: string;
+    expiryDate?: string;
+    category?: string;
+    reason?: string;
+  } | null = null;
+
+  try {
+    const stored = await getStoredScans();
+    const match = (stored || []).find(
+      (s) => s.code.trim().toUpperCase() === cleanCode.toUpperCase() && !isGenericProductName(s.name)
+    );
+    if (match) {
+      cachedRealScan = {
+        name: match.name,
+        manufacturer: match.manufacturer,
+        batchId: match.batchId,
+        imageUrl: match.imageUrl,
+        nafdac: match.nafdac,
+        expiryDate: match.expiryDate,
+        category: match.category,
+        reason: match.reason,
+      };
+    }
+  } catch {
+    // Continue
+  }
+
+  // If this is a standard commercial barcode that was ALREADY resolved to a real product on this phone,
+  // record the telemetry scan in the background and return the verified product immediately!
+  if (!isSingleUseSerial && cachedRealScan) {
+    fetch(`${SENSOO_API_BASE_URL}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+
+    return {
+      status: 'AUTHENTIC',
+      reason: cachedRealScan.reason || 'Verified in Official Manufacturer & GS1 Product Registry',
+      alarms: [],
+      new_state: 'IN_STOCK',
+      product_name: cachedRealScan.name,
+      manufacturer: cachedRealScan.manufacturer || 'Verified Manufacturer',
+      batch_id: cachedRealScan.batchId || `GTIN-${digitsOnly.slice(-6) || 'VERIFIED'}`,
+      image_url: cachedRealScan.imageUrl || null,
+      nafdac: cachedRealScan.nafdac || null,
+      expiry_date: cachedRealScan.expiryDate || null,
+      category: cachedRealScan.category || null,
+    };
+  }
+
   // Tier 1: Direct GS1 Nigeria National Registry Live Portal (productregistry.gs1ng.org)
-  if (digitsOnly.startsWith('615') && digitsOnly.length >= 12) {
+  if ((digitsOnly.startsWith('615') || digitsOnly.startsWith('0615')) && digitsOnly.length >= 12) {
     const gs1Hit = await lookupGs1Nigeria(digitsOnly);
-    if (gs1Hit) {
+    if (gs1Hit && !isGenericProductName(gs1Hit.productName)) {
+      const img = await fetchProductImageUrl(`${gs1Hit.brand} ${gs1Hit.productName}`);
       fetch(`${SENSOO_API_BASE_URL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -718,6 +908,7 @@ export async function verifyScanOnline(
         product_name: gs1Hit.productName,
         manufacturer: gs1Hit.brand,
         batch_id: gs1Hit.batch,
+        image_url: img,
         expiry_date: gs1Hit.expiryDate,
         nafdac: gs1Hit.nafdac,
         category: gs1Hit.category,
@@ -730,11 +921,13 @@ export async function verifyScanOnline(
     const nafdacRes = await fetchLiveNafdacGreenbook(cleanCode, 'All', 'All', 5);
     if (nafdacRes && nafdacRes.products && nafdacRes.products.length > 0) {
       const cleanUpper = cleanCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const matched = nafdacRes.products.find((p) => {
-        const nrnUpper = (p.nrn || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const codeUpper = (p.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        return nrnUpper === cleanUpper || codeUpper === cleanUpper;
-      }) || (nafdacRes.products.length === 1 ? nafdacRes.products[0] : null);
+      const isPureDigitsBarcode = /^\d{8,14}$/.test(cleanCode);
+      const matched =
+        nafdacRes.products.find((p) => {
+          const nrnUpper = (p.nrn || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const codeUpper = (p.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          return (nrnUpper && nrnUpper === cleanUpper) || (codeUpper && codeUpper === cleanUpper);
+        }) || (!isPureDigitsBarcode && nafdacRes.products.length === 1 ? nafdacRes.products[0] : null);
 
       if (matched) {
         const isAuthentic = matched.status === 'Active';
@@ -774,7 +967,7 @@ export async function verifyScanOnline(
   let backendData: ScanApiResponse | null = null;
   try {
     const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 6000);
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
     const response = await fetch(`${SENSOO_API_BASE_URL}/scan`, {
       method: 'POST',
       headers: {
@@ -793,32 +986,49 @@ export async function verifyScanOnline(
     // Backend waking up or network slow - proceed to direct live lookup
   }
 
+  // Filter out false-positive "Already Purchased" alarms on standard mass-produced commercial retail barcodes
+  if (backendData && !isSingleUseSerial && Array.isArray(backendData.alarms)) {
+    backendData.alarms = backendData.alarms.filter(
+      (a) => !a.toLowerCase().includes('already purchased') && !a.toLowerCase().includes('clone')
+    );
+    if (backendData.alarms.length === 0 && backendData.status === 'FAKE' && !isGenericProductName(backendData.product_name)) {
+      backendData.status = 'AUTHENTIC';
+      backendData.reason = 'Verified in Official Manufacturer & GS1 Product Registry';
+    }
+  }
+
   // If backend verified as AUTHENTIC with a specific real product name, return immediately.
   // Never accept generic placeholders ("Authentic GS1 Product...", "Unregistered...") prematurely!
   if (
     backendData &&
     backendData.status === 'AUTHENTIC' &&
-    backendData.product_name &&
-    !backendData.product_name.startsWith('Authentic GS1 Product') &&
-    !backendData.product_name.startsWith('Unregistered') &&
-    !backendData.product_name.startsWith('Item ')
+    !isGenericProductName(backendData.product_name)
   ) {
+    if (!backendData.image_url && backendData.product_name) {
+      backendData.image_url =
+        cachedRealScan?.imageUrl || (await fetchProductImageUrl(backendData.product_name));
+    }
     return backendData;
   }
 
-  // If backend triggered high-severity security alarms (clone, physics velocity, region mismatch), respect the alarm!
+  // If backend triggered high-severity security alarms (clone on serialized code, physics velocity, region mismatch), respect the alarm!
   if (backendData && backendData.alarms && backendData.alarms.length > 0) {
     const hasSecurityAlarm = backendData.alarms.some(
       (a) => !a.toLowerCase().includes('invalid code') && !a.toLowerCase().includes('not registered')
     );
     if (hasSecurityAlarm) {
+      if (isGenericProductName(backendData.product_name) && cachedRealScan) {
+        backendData.product_name = cachedRealScan.name;
+        backendData.manufacturer = cachedRealScan.manufacturer || backendData.manufacturer;
+        backendData.image_url = cachedRealScan.imageUrl || backendData.image_url;
+      }
       return backendData;
     }
   }
 
   // Tier 2: OpenFoodFacts Global Barcode Whitelist
   const offHit = await lookupOpenFoodFacts(cleanCode);
-  if (offHit) {
+  if (offHit && !isGenericProductName(offHit.productName)) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -846,7 +1056,7 @@ export async function verifyScanOnline(
 
   // Tier 3: UPCitemdb Commercial Retail Database (Authoritative exact barcode catalog)
   const upcHit = await lookupUpcItemDb(cleanCode);
-  if (upcHit) {
+  if (upcHit && !isGenericProductName(upcHit.productName)) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -874,7 +1084,7 @@ export async function verifyScanOnline(
 
   // Tier 4: EMDEX Nigeria Drug Database
   const emdexHit = await lookupEmdexDrug(cleanCode);
-  if (emdexHit) {
+  if (emdexHit && !isGenericProductName(emdexHit.productName)) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -899,9 +1109,9 @@ export async function verifyScanOnline(
     };
   }
 
-  // Tier 5: Universal Real-Time Web & GS1 GTIN Search (Exact Match via Gemini & Web)
+  // Tier 5: Universal Real-Time Web & GS1 GTIN Search (Exact Match via Gemini Google Search Grounding & Web)
   const webHit = await lookupLiveGtinWeb(cleanCode);
-  if (webHit) {
+  if (webHit && !isGenericProductName(webHit.productName)) {
     fetch(`${SENSOO_API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -933,8 +1143,21 @@ export async function verifyScanOnline(
   // 4. GS1 Mathematical Verification Gate (Modulo-10 Checksum & Country Prefix)
   const gs1Check = validateGs1Barcode(cleanCode);
   if (gs1Check.isValid) {
+    // If we had a cached real scan earlier, prefer its real name over a generic country string
+    if (cachedRealScan) {
+      return {
+        status: 'AUTHENTIC',
+        reason: `Verified GS1 Standard Barcode (Origin: ${gs1Check.country})`,
+        alarms: [],
+        new_state: 'IN_STOCK',
+        product_name: cachedRealScan.name,
+        manufacturer: cachedRealScan.manufacturer || `${gs1Check.country} / GS1 Registered`,
+        batch_id: cachedRealScan.batchId || `GS1-${digitsOnly.slice(-6)}`,
+        image_url: cachedRealScan.imageUrl || null,
+      };
+    }
+
     // If the barcode passes mathematical modulo-10 validation, it is structurally genuine!
-    // Never falsely label a genuine GS1 product as counterfeit.
     return {
       status: 'AUTHENTIC',
       reason: `Verified GS1 Standard Barcode (Origin: ${gs1Check.country})`,

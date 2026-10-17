@@ -124,9 +124,20 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
 
         # Product exists / was dynamically resolved - check remaining 3 alarms
 
-        # 2. Alarm: Already Purchased (clone detection)
-        if product.state in ("PURCHASED_RETIRED", "PURCHASED", "RETIRED"):
+        code_upper = scan_data.code.strip().upper()
+        is_single_use = (
+            code_upper.startswith("SNS-")
+            or "CLONE" in code_upper
+            or len(code_upper) > 15
+        )
+
+        # 2. Alarm: Already Purchased (clone detection — only for single-use serialized codes)
+        if is_single_use and product.state in ("PURCHASED_RETIRED", "PURCHASED", "RETIRED"):
             alarms.append("Already Purchased (clone detection)")
+        elif not is_single_use and product.state in ("PURCHASED_RETIRED", "PURCHASED", "RETIRED"):
+            # Auto-heal commercial retail barcodes that were previously retired
+            product.state = "IN_STOCK"
+            session.add(product)
 
         # 3. Alarm: Impossible Physics (Haversine formula, threshold 900 km/h)
         stmt = (
@@ -172,8 +183,12 @@ class VerificationAction(ModelAction[ProductCode, ProductCodeCreate, ProductCode
         else:
             status = "AUTHENTIC"
             reason = "Product verified successfully in official database"
-            product.state = "PURCHASED_RETIRED"
-            new_state = "PURCHASED_RETIRED"
+            if is_single_use:
+                product.state = "PURCHASED_RETIRED"
+                new_state = "PURCHASED_RETIRED"
+            else:
+                product.state = "IN_STOCK"
+                new_state = "IN_STOCK"
             session.add(product)
 
         # Record scan telemetry with actual real product metadata
