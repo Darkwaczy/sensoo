@@ -136,7 +136,7 @@ export default function ScannerScreen() {
       try {
         cameraRef.current
           ?.takePictureAsync({
-            quality: 0.25,
+            quality: 0.45,
             base64: true,
             skipProcessing: true,
             shutterSound: false,

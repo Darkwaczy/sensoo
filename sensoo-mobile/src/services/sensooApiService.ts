@@ -464,7 +464,7 @@ export async function lookupLiveGtinWeb(
   const geminiKey = getGeminiApiKey();
   const frameBase64 = getLastCapturedScanFrame(digits);
 
-  // Task A1: OpenAI Live Camera Frame Vision OCR (gpt-4o-mini reads the physical bottle/box in the user's hand in ~1.2s)
+  // Task A1: OpenAI Live Camera Frame Vision OCR (gpt-4.1-mini reads the physical bottle/box/label in the user's hand in ~1.2s)
   const openAiVisionTask = (async () => {
     if (!openAiKey || !frameBase64) return null;
     try {
@@ -477,7 +477,7 @@ export async function lookupLiveGtinWeb(
           Authorization: `Bearer ${openAiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4.1-mini',
           response_format: { type: 'json_object' },
           temperature: 0.0,
           messages: [
@@ -486,13 +486,13 @@ export async function lookupLiveGtinWeb(
               content: [
                 {
                   type: 'text',
-                  text: `The user is scanning a physical retail product in Nigeria with barcode ${variantQueryText}. Look at the product packaging/bottle/label in this photo. If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
+                  text: `The user is scanning a physical retail product in Nigeria with barcode ${variantQueryText}. Look carefully at the product packaging/bottle/label and any text printed near the barcode (brand logo, product name, manufacturer name, NAFDAC reg number, weight/volume). If you can read or recognize the brand name or product name printed on the package, return ONLY valid JSON: {"found": true, "productName": "Visible Brand & Product Name", "brand": "Brand or Manufacturer Name", "category": "Product Category"}. If only the black-and-white barcode stripes are visible with no readable brand/product text or recognizable packaging, return {"found": false}. Never guess from the barcode numbers alone.`,
                 },
                 {
                   type: 'image_url',
                   image_url: {
                     url: `data:image/jpeg;base64,${frameBase64}`,
-                    detail: 'low',
+                    detail: 'auto',
                   },
                 },
               ],
@@ -526,38 +526,61 @@ export async function lookupLiveGtinWeb(
     return null;
   })();
 
-  // Task A2: OpenAI Live Web Search (gpt-4o-mini-search-preview searches Nigerian & global stores for both 13-digit and 12-digit variants)
+  // Task A2: OpenAI Live Web Search (/v1/responses web_search_preview + Brave Search Nigerian index extraction via gpt-4.1-mini)
   const openAiSearchTask = (async () => {
     if (!openAiKey) return null;
-    try {
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 5500);
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openAiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini-search-preview',
-          web_search_options: { search_context_size: 'low' },
-          messages: [
-            {
-              role: 'user',
-              content: `Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, Mopheth, PriceCheck, GS1 Nigeria) and global barcode catalogs (OpenFoodFacts, UPCitemdb) for exact barcode ${variantQueryText}. CRITICAL: Never guess from the GS1 prefix alone! Reply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if the exact barcode is not found.`,
-            },
-          ],
-        }),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timeout);
 
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.choices?.[0]?.message?.content || '';
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
+    // Subtask 1: Brave Search index -> OpenAI gpt-4.1-mini structured JSON extraction (~1.5s)
+    const braveOpenAiSubtask = (async () => {
+      try {
+        const bCtrl = new AbortController();
+        const bTimeout = setTimeout(() => bCtrl.abort(), 3200);
+        const bRes = await fetch(`https://search.brave.com/search?q=${encodeURIComponent(alt12)}`, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+          signal: bCtrl.signal,
+        });
+        clearTimeout(bTimeout);
+        if (!bRes.ok) return null;
+        const html = await bRes.text();
+        const matches = [
+          ...html.matchAll(
+            /<div class="title[^"]*"[^>]*>([\s\S]*?)<\/div>|<div class="snippet-description[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+          ),
+        ];
+        const lines = matches
+          .slice(0, 10)
+          .map((m) => decodeHtmlEntities(((m[1] || '') + ' ' + (m[2] || '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()))
+          .filter((s) => s.length > 3);
+        if (lines.length === 0) return null;
+
+        const aiCtrl = new AbortController();
+        const aiTimeout = setTimeout(() => aiCtrl.abort(), 3000);
+        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4.1-mini',
+            response_format: { type: 'json_object' },
+            temperature: 0.0,
+            messages: [
+              {
+                role: 'user',
+                content: `Web search results for barcode ${variantQueryText}:\n${lines.join('\n')}\n\nIf the search results above clearly identify a real commercial retail product for this barcode (do NOT pick generic "Barcode Lookup" titles or unrelated items), return JSON: {"found": true, "productName": "Clean Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"}. Otherwise return {"found": false}.`,
+              },
+            ],
+          }),
+          signal: aiCtrl.signal,
+        });
+        clearTimeout(aiTimeout);
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          const parsed = JSON.parse(aiData.choices?.[0]?.message?.content || '{}');
           const pName = parsed.productName || parsed.product_name;
           if (parsed.found && pName && !pName.toLowerCase().includes('unknown') && !isGenericProductName(pName)) {
             return {
@@ -570,11 +593,60 @@ export async function lookupLiveGtinWeb(
             };
           }
         }
+      } catch {
+        // Ignore
       }
-    } catch {
-      // Ignore
-    }
-    return null;
+      return null;
+    })();
+
+    // Subtask 2: Native OpenAI /v1/responses with web_search_preview tool
+    const nativeResponsesSubtask = (async () => {
+      try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 5500);
+        const res = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4.1-mini',
+            tools: [{ type: 'web_search_preview', search_context_size: 'low' }],
+            input: `Search Nigerian supermarkets (Supermart.ng, Jumia, Konga, Mopheth, KunleAra, PriceCheck, GS1 Nigeria) and global barcode catalogs (OpenFoodFacts, UPCitemdb) for exact barcode ${variantQueryText}. CRITICAL: Never guess from the GS1 prefix alone! Reply with ONLY a valid JSON object (no markdown fences): {"found": true, "productName": "Exact Brand & Product Name", "brand": "Manufacturer or Brand Name", "category": "Product Category"} or {"found": false} if the exact barcode is not found.`,
+          }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          const msgItem = (data.output || []).find((o: any) => o.type === 'message');
+          const text = data.output_text || msgItem?.content?.[0]?.text || '';
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            const pName = parsed.productName || parsed.product_name;
+            if (parsed.found && pName && !pName.toLowerCase().includes('unknown') && !isGenericProductName(pName)) {
+              return {
+                productName: String(pName).trim(),
+                brand: String(parsed.brand || 'Verified Brand').trim(),
+                batch: isNigerianBarcode ? `GS1NG-${primary13.slice(-6)}` : `GTIN-${primary13}`,
+                category: parsed.category || 'Consumer Retail Goods',
+                status: 'AUTHENTIC',
+                origin: isNigerianBarcode ? 'Nigeria' : undefined,
+              };
+            }
+          }
+        }
+      } catch {
+        // Ignore
+      }
+      return null;
+    })();
+
+    const [braveHit, nativeHit] = await Promise.all([braveOpenAiSubtask, nativeResponsesSubtask]);
+    return braveHit || nativeHit;
   })();
 
   // Task B: Groq Live Browser Search (openai/gpt-oss-20b with built-in browser_search tool — high quota & searches both 12/13-digit variants)
