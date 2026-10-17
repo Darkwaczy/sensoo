@@ -73,66 +73,6 @@ export function getLastCapturedScanFrame(code: string): string | null {
   return lastCapturedFrameBase64;
 }
 
-// Instant 0ms verified catalog for popular Nigerian & tested retail barcodes
-const KNOWN_VERIFIED_BARCODES: Record<
-  string,
-  { productName: string; brand: string; category: string; nafdac?: string; origin?: string }
-> = {
-  '5449000129420': {
-    productName: 'Eva Premium Table Water (75cl)',
-    brand: 'Nigerian Bottling Company / The Coca-Cola Company',
-    category: 'Beverages & Table Water',
-    nafdac: '01-0490',
-    origin: 'Nigeria',
-  },
-  '5449000129383': {
-    productName: 'Eva Premium Table Water (150cl)',
-    brand: 'Nigerian Bottling Company / The Coca-Cola Company',
-    category: 'Beverages & Table Water',
-    nafdac: '01-0490',
-    origin: 'Nigeria',
-  },
-  '5449000129437': {
-    productName: 'Eva Premium Table Water (50cl)',
-    brand: 'Nigerian Bottling Company / The Coca-Cola Company',
-    category: 'Beverages & Table Water',
-    nafdac: '01-0490',
-    origin: 'Nigeria',
-  },
-  '5449000051660': {
-    productName: 'Eva Premium Table Water (75cl)',
-    brand: 'Nigerian Bottling Company / The Coca-Cola Company',
-    category: 'Beverages & Table Water',
-    nafdac: '01-0490',
-    origin: 'Nigeria',
-  },
-  '5449000051653': {
-    productName: 'Eva Premium Table Water (150cl)',
-    brand: 'Nigerian Bottling Company / The Coca-Cola Company',
-    category: 'Beverages & Table Water',
-    nafdac: '01-0490',
-    origin: 'Nigeria',
-  },
-  '075724183056': {
-    productName: 'Lottabody Wrap Me Foaming Mousse (Coconut & Shea Oils)',
-    brand: 'Lottabody / Revlon Realistic',
-    category: 'Cosmetics & Hair Care',
-    origin: 'United States',
-  },
-  '0075724183056': {
-    productName: 'Lottabody Wrap Me Foaming Mousse (Coconut & Shea Oils)',
-    brand: 'Lottabody / Revlon Realistic',
-    category: 'Cosmetics & Hair Care',
-    origin: 'United States',
-  },
-  '8411250013061': {
-    productName: 'Cirage Liquide Shoe Polish (75ml)',
-    brand: 'Cirage / Bama Care',
-    category: 'Household & Shoe Care',
-    origin: 'Spain',
-  },
-};
-
 export function isGenericProductName(name?: string | null): boolean {
   if (!name) return true;
   const n = name.trim();
@@ -499,22 +439,6 @@ export async function lookupLiveGtinWeb(
 } | null> {
   const digits = barcode.replace(/[^0-9]/g, '');
   if (digits.length < 7) return null;
-
-  // 0. Instant 0ms check against verified Nigerian & international catalog
-  const knownItem = KNOWN_VERIFIED_BARCODES[digits] || (digits.length === 13 && digits.startsWith('0') ? KNOWN_VERIFIED_BARCODES[digits.slice(1)] : undefined);
-  if (knownItem) {
-    const img = await fetchProductImageUrl(knownItem.productName);
-    return {
-      productName: knownItem.productName,
-      brand: knownItem.brand,
-      batch: `GTIN-${digits}`,
-      category: knownItem.category,
-      status: 'AUTHENTIC',
-      origin: knownItem.origin,
-      nafdac: knownItem.nafdac,
-      imageUrl: img || undefined,
-    };
-  }
 
   const isNigerianBarcode = digits.startsWith('615') || digits.startsWith('0615');
   const isCocaColaHbc = digits.startsWith('5449000');
